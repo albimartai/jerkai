@@ -1,36 +1,41 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# JerkAI
 
-## Getting Started
+A personal, single-user health dashboard. It lands biometric data from disconnected sources (Fitdays smart scale, Whoop, via Apple Health) into one Postgres store and turns a noisy daily body fat reading into a trustworthy trend.
 
-First, run the development server:
+This repo is also a portfolio artifact: it is built in public, with the same secret hygiene and code quality expected of production work. No real biometric data is ever exposed publicly.
+
+## Stack
+
+- **Frontend / API:** Next.js (App Router, TypeScript), React Server Components for data fetching
+- **Database:** Neon Postgres (production branch + dev branch)
+- **Hosting:** Vercel (Production on `main`, Preview on every other branch), custom domain `jerkai.app`
+- **Migrations:** [node-pg-migrate](https://github.com/salsita/node-pg-migrate)
+- **Secret hygiene:** `.env.local` gitignored from the first commit, GitHub secret scanning, and a [gitleaks](https://github.com/gitleaks/gitleaks) pre-commit hook via husky
+
+## Local development
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install                 # also installs the husky pre-commit hook
+cp .env.example .env.local  # fill in the Neon dev-branch connection string
+npm run migrate             # apply migrations
+npm run seed:dev            # insert a sample reading (dev only)
+npm run dev                 # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The pre-commit hook requires gitleaks on your PATH (`brew install gitleaks`).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Database
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+One migration-managed schema, applied to both Neon branches. `biometric_readings` stores one row per source/metric/date in a tall shape, so metrics from different sources join on a shared date key.
 
-## Learn More
+- `npm run migrate` applies pending migrations (uses `DATABASE_URL` from `.env.local`)
+- `npm run migrate:create <name>` scaffolds a new migration
 
-To learn more about Next.js, take a look at the following resources:
+## Environments
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+| Environment | Vercel | Neon branch |
+|---|---|---|
+| Production (`main`) | jerkai.app | `production` |
+| Preview (branches/PRs) | `*.vercel.app` preview URLs | `dev` |
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Preview deployments never touch production data.
