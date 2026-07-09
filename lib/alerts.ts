@@ -33,7 +33,12 @@ export async function sendSyncFailureAlert(subject: string, body: string): Promi
     if (!res.ok) {
       const detail = await res.text().catch(() => "");
       console.error(`sync alert email failed: ${res.status} ${detail}`);
+      return;
     }
+    // Log the email id from Resend's response — the only verifiable record
+    // that a send was accepted, since success is otherwise silent here.
+    const id: unknown = (await res.json().catch(() => null))?.id;
+    console.log(`sync alert sent: ${typeof id === "string" ? id : "(no id in Resend response)"}`);
   } catch (err) {
     console.error("sync alert email failed:", err);
   }
