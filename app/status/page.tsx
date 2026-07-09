@@ -1,3 +1,6 @@
+import { redirect } from "next/navigation";
+
+import { auth } from "@/auth";
 import { getSql } from "@/lib/db";
 
 // Always query at request time — this page must reflect the live database,
@@ -14,6 +17,13 @@ type SyncSummaryRow = {
 };
 
 export default async function Status() {
+  // proxy.ts already gates this route; re-checking here keeps sync state
+  // behind a session even if the proxy matcher ever regresses.
+  const session = await auth();
+  if (!session) {
+    redirect("/signin");
+  }
+
   const sql = getSql();
   const rows = (await sql`
     select source,

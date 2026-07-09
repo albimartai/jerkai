@@ -1,3 +1,6 @@
+import { redirect } from "next/navigation";
+
+import { auth } from "@/auth";
 import { getSql } from "@/lib/db";
 
 // Always query at request time — this page must reflect the live database,
@@ -11,6 +14,13 @@ type BodyFatReading = {
 };
 
 export default async function Home() {
+  // proxy.ts already gates this route; re-checking here keeps real biometric
+  // data behind a session even if the proxy matcher ever regresses.
+  const session = await auth();
+  if (!session) {
+    redirect("/signin");
+  }
+
   const sql = getSql();
   const rows = (await sql`
     select value, unit, to_char(reading_date, 'YYYY-MM-DD') as reading_date
