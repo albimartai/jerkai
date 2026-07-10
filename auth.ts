@@ -3,6 +3,8 @@ import Resend from "next-auth/providers/resend";
 import NeonAdapter from "@auth/neon-adapter";
 import { Pool } from "@neondatabase/serverless";
 
+import { authorized, signIn as signInCallback } from "@/lib/auth-callbacks";
+
 // Pin production magic links to the canonical domain. Without this, a link
 // requested via a *.vercel.app deployment URL would point back at that URL
 // (Auth.js builds callback URLs from the request host). Preview deployments
@@ -38,24 +40,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth(() => {
       // sign-in page renders as a visible rejection — never a silent no-op.
       error: "/signin",
     },
+    // Access-control decisions live in lib/auth-callbacks.ts (unit tested
+    // there, without the adapter/provider setup this file needs).
     callbacks: {
-      // Drives proxy.ts: any request without a valid session JWT is
-      // redirected to pages.signIn with a callbackUrl. Required — without
-      // this callback, Auth.js middleware authorizes every request.
-      authorized({ auth }) {
-        return !!auth;
-      },
-      // Single-user app: only ALLOWLISTED_EMAIL may sign in. This runs when
-      // the magic link is *requested*, so unlisted addresses are rejected
-      // before any email is sent (and again on link verification).
-      signIn({ user }) {
-        const allowed = process.env.ALLOWLISTED_EMAIL?.trim().toLowerCase();
-        if (!allowed) {
-          console.error("sign-in rejected: ALLOWLISTED_EMAIL is not set");
-          return false;
-        }
-        return user.email?.trim().toLowerCase() === allowed;
-      },
+      authorized,
+      signIn: signInCallback,
     },
   };
 });

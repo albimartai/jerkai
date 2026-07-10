@@ -1,0 +1,55 @@
+# Lint, typecheck, unit tests, then integration tests against a disposable
+# Neon branch (created off dev per run, migrated from an empty database,
+# always torn down — see scripts/ci/neon-branch.mjs). CI never touches the
+# persistent dev/prod Neon branches or the deployed app.
+name: CI
+
+on: push
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+      NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        # next-env.d.ts is gitignored; typegen recreates it (and route types)
+        # without needing a full build or any runtime env vars.
+        run: npx next typegen && npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Create disposable Neon branch
+        id: neon
+        run: node scripts/ci/neon-branch.mjs create
+
+      - name: Run migrations from an empty database
+        run: npm run migrate:ci
+        env:
+          DATABASE_URL: ${{ steps.neon.outputs.database_url }}
+
+      - name: Integration tests
+        run: npm run test:integration
+        env:
+          DATABASE_URL: ${{ steps.neon.outputs.database_url }}
+
+      - name: Tear down Neon branch
+        # always(): failed runs must not leak branches (Neon free tier has a
+        # branch cap, and leaked branches would accumulate one per push).
+        if: always() && steps.neon.outputs.branch_id != ''
+        run: node scripts/ci/neon-branch.mjs delete "${{ steps.neon.outputs.branch_id }}"

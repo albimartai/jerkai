@@ -7,7 +7,12 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --project unit",
+    "test:watch": "vitest --project unit",
+    "test:integration": "vitest run --project integration",
     "migrate": "node-pg-migrate --envPath .env.local up",
+    "migrate:ci": "node-pg-migrate up",
     "migrate:down": "node-pg-migrate --envPath .env.local down",
     "migrate:create": "node-pg-migrate create",
     "seed:dev": "node --env-file=.env.local scripts/seed-dev.mjs",
@@ -33,6 +38,7 @@
     "node-pg-migrate": "^8.0.4",
     "pg": "^8.22.0",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.10"
   }
 }
