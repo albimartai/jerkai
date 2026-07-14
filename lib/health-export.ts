@@ -2,8 +2,22 @@
 // biometric_readings rows. Field names follow the schema published at
 // github.com/Lybron/health-auto-export (wiki: API Export — JSON Format).
 //
-// Values and units are stored exactly as sent — unit/timezone normalization
-// is deliberately deferred to the unified-schema step (Build Sequencing 3).
+// Timezone convention (unified schema, decided 2026-07-14): reading_date is
+// the DEVICE-LOCAL calendar day. Health Auto Export sends timestamps as
+// local time with an explicit UTC offset ("yyyy-MM-dd HH:mm:ss ±HHMM" —
+// verified against all 6,848 Production rows: every one carries -0500/-0600,
+// i.e. America/Chicago), so the leading date component already IS the local
+// day. extractReadingDate() enforces this by accepting only offset-bearing
+// (or bare-date) formats and rejecting ISO-8601/UTC "Z" forms, so a future
+// format change surfaces as an ingest error + alert instead of silently
+// bucketing evening readings onto the next UTC day.
+//
+// Unit convention: values and units are stored exactly as sent, never
+// converted. Verified against all Production history 2026-07-14:
+// weight_body_mass and lean_body_mass arrive uniformly in lb (756 rows each,
+// Dec 2023 → today), so no reconciliation is needed; the stored `unit`
+// column remains the source of truth should Health Auto Export's unit
+// settings ever change.
 
 export type HealthExportDataPoint = {
   date?: string; // "yyyy-MM-dd HH:mm:ss Z" (or "yyyy-MM-dd" for aggregated sleep)
@@ -23,7 +37,12 @@ export type HealthExportPayload = {
   };
 };
 
-export type ReadingSource = "fitdays" | "whoop" | "apple_health";
+// Every source that can appear in biometric_readings and sync_runs. The
+// ingest route logs one sync_runs row per source per run, and /status
+// renders one lane per source — keep all three in sync via this list.
+export const READING_SOURCES = ["fitdays", "whoop", "apple_health"] as const;
+
+export type ReadingSource = (typeof READING_SOURCES)[number];
 
 export type MappedReading = {
   source: ReadingSource;
@@ -48,10 +67,11 @@ const METRIC_MAP: Record<string, { source: ReadingSource; metric: string }> = {
   weight_body_mass: { source: "fitdays", metric: "weight" },
   body_fat_percentage: { source: "fitdays", metric: "body_fat_pct" },
   body_mass_index: { source: "fitdays", metric: "bmi" },
-  // HealthKit has no muscle-mass identifier — Fitdays' muscle-mass guardrail
-  // arrives as lean_body_mass, and is stored under that name until a real
-  // export confirms whether the value matches Fitdays' "Muscle Mass" or its
-  // "Lean Body Mass" reading. See PRD → Validation Plan item 3.
+  // HealthKit has no muscle-mass identifier — Fitdays' guardrail arrives as
+  // lean_body_mass. Resolved 2026-07-14 against real backfilled data: the
+  // value equals (1 - body_fat_pct) x weight to within rounding on every
+  // spot-checked day, so it is genuinely Lean Body Mass, not Fitdays'
+  // separate "Muscle Mass" reading. The stored name is correct.
   lean_body_mass: { source: "fitdays", metric: "lean_body_mass" },
   heart_rate_variability: { source: "whoop", metric: "hrv" },
   resting_heart_rate: { source: "whoop", metric: "rhr" },
@@ -63,10 +83,21 @@ const METRIC_MAP: Record<string, { source: ReadingSource; metric: string }> = {
 // sleep duration from sleep_analysis instead.
 const SLEEP_METRIC_NAME = "sleep_analysis";
 
-function extractReadingDate(point: HealthExportDataPoint): string | null {
+// Accepted date shapes, both of which make the leading component the
+// device-local calendar day:
+//   "yyyy-MM-dd HH:mm:ss ±HHMM"  — Health Auto Export's standard format
+//   "yyyy-MM-dd"                 — aggregated sleep_analysis
+// Anything else (notably ISO-8601 "yyyy-MM-ddTHH:mm:ssZ", whose leading
+// component would be the UTC day) is rejected so it surfaces as an ingest
+// error rather than a silently wrong reading_date.
+const LOCAL_DAY_FORMAT = /^(\d{4}-\d{2}-\d{2})( \d{2}:\d{2}:\d{2} [+-]\d{4})?$/;
+
+// Truncates a Health Auto Export timestamp to the device-local calendar day
+// used as biometric_readings.reading_date — the shared date key all sources
+// join on. Exported for direct unit testing.
+export function extractReadingDate(point: HealthExportDataPoint): string | null {
   const raw = typeof point.date === "string" ? point.date : null;
-  const day = raw?.slice(0, 10);
-  return day && /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : null;
+  return raw?.match(LOCAL_DAY_FORMAT)?.[1] ?? null;
 }
 
 function extractSleepDuration(point: HealthExportDataPoint): number | null {

@@ -4,15 +4,17 @@ import { getSql } from "@/lib/db";
 import { sendSyncFailureAlert } from "@/lib/alerts";
 import {
   mapHealthExportPayload,
+  READING_SOURCES,
   type HealthExportPayload,
   type MappedReading,
+  type ReadingSource,
 } from "@/lib/health-export";
 
-// The two device pipes tracked in sync_runs. step_count ('apple_health')
-// arrives in the same ingest call, so its observability rides along: any run
-// logged here also landed whatever steps the payload contained.
-const SYNC_SOURCES = ["fitdays", "whoop"] as const;
-type SyncSource = (typeof SYNC_SOURCES)[number];
+// Every source gets its own sync_runs lane — including 'apple_health'
+// (step_count), which arrives in the same ingest call as the device pipes
+// but since Session 5 is logged and alerted on independently.
+const SYNC_SOURCES = READING_SOURCES;
+type SyncSource = ReadingSource;
 
 type SourceOutcome = {
   status: "success" | "failure" | "partial";
@@ -42,8 +44,8 @@ async function recordRun(
 }
 
 // A request that never reached the mapping stage (bad secret, malformed body)
-// can't be attributed to one device, and neither pipe landed — log a failure
-// run for both so /status and alerting see it either way.
+// can't be attributed to one source, and no pipe landed — log a failure
+// run for every lane so /status and alerting see it either way.
 async function recordRejectedRequest(startedAt: Date, reason: string): Promise<void> {
   try {
     await Promise.all(
@@ -112,16 +114,15 @@ export async function POST(request: Request): Promise<Response> {
   // Land readings one by one so a single bad data point degrades that
   // source's run to 'partial' instead of discarding the whole payload.
   const outcomes = new Map<SyncSource, { synced: number; errors: string[] }>();
-  let appleHealthRows = 0;
   for (const source of SYNC_SOURCES) {
     outcomes.set(source, { synced: 0, errors: [] });
   }
   for (const error of mapped.errors) {
-    // Mapping errors carry the metric name; attribute sleep/hrv/rhr to whoop,
-    // body composition to fitdays, based on the metric prefix in the message.
-    // step_count has no sync_runs lane of its own and rides with whoop.
-    const source: SyncSource =
-      /^(heart_rate_variability|resting_heart_rate|sleep_analysis|step_count)/.test(error)
+    // Mapping errors carry the metric name; attribute each to its source's
+    // lane based on the metric prefix in the message.
+    const source: SyncSource = /^step_count/.test(error)
+      ? "apple_health"
+      : /^(heart_rate_variability|resting_heart_rate|sleep_analysis)/.test(error)
         ? "whoop"
         : "fitdays";
     outcomes.get(source)!.errors.push(error);
@@ -130,19 +131,10 @@ export async function POST(request: Request): Promise<Response> {
   for (const reading of mapped.readings) {
     try {
       await upsertReading(reading);
-      if (reading.source === "apple_health") {
-        appleHealthRows += 1;
-      } else {
-        outcomes.get(reading.source)!.synced += 1;
-      }
+      outcomes.get(reading.source)!.synced += 1;
     } catch (err) {
       const message = `${reading.metric} (${reading.readingDate}): ${err instanceof Error ? err.message : String(err)}`;
-      if (reading.source === "apple_health") {
-        // No apple_health lane in sync_runs — surface via whichever run exists.
-        outcomes.get("whoop")!.errors.push(`step_count: ${message}`);
-      } else {
-        outcomes.get(reading.source)!.errors.push(message);
-      }
+      outcomes.get(reading.source)!.errors.push(message);
     }
   }
 
@@ -182,7 +174,6 @@ export async function POST(request: Request): Promise<Response> {
     {
       status: overall,
       sources: runResults,
-      appleHealthRows,
       ignoredMetrics: mapped.ignoredMetrics,
     },
     { status: overall === "failure" ? 500 : 200 },

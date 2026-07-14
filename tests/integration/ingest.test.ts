@@ -115,14 +115,15 @@ describe("POST /api/ingest/health — happy path", () => {
     expect(res.status).toBe(200);
     expect(body.status).toBe("success");
     expect(body.sources).toEqual({
+      apple_health: { status: "success", rowsSynced: 1, errorMessage: null },
       fitdays: { status: "success", rowsSynced: 4, errorMessage: null },
       whoop: { status: "success", rowsSynced: 3, errorMessage: null },
     });
-    expect(body.appleHealthRows).toBe(1);
     expect(body.ignoredMetrics).toEqual([]);
 
     expect(await readingRows()).toEqual(expectedRows);
     expect(await syncRuns()).toEqual([
+      { source: "apple_health", status: "success", rows_synced: 1, error_message: null },
       { source: "fitdays", status: "success", rows_synced: 4, error_message: null },
       { source: "whoop", status: "success", rows_synced: 3, error_message: null },
     ]);
@@ -140,7 +141,7 @@ describe("POST /api/ingest/health — happy path", () => {
     expect(await readingRows()).toEqual(expectedRows);
     // Both runs are logged: sync_runs is an append-only run log, not deduped.
     const runs = await syncRuns();
-    expect(runs).toHaveLength(4);
+    expect(runs).toHaveLength(6);
     expect(runs.every((run) => run.status === "success")).toBe(true);
   });
 
@@ -165,26 +166,75 @@ describe("POST /api/ingest/health — happy path", () => {
   });
 });
 
+describe("POST /api/ingest/health — apple_health (step count) lane", () => {
+  it("gives a step-count-only payload its own sync_runs row and no other lanes", async () => {
+    const payload = {
+      data: {
+        metrics: [{ name: "step_count", units: "count", data: [point("2026-07-09", 10432)] }],
+      },
+    };
+    const res = await POST(ingestRequest(JSON.stringify(payload), SECRET));
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.status).toBe("success");
+    expect(body.sources).toEqual({
+      apple_health: { status: "success", rowsSynced: 1, errorMessage: null },
+    });
+
+    // The widened check constraint accepted the row, and /status's per-source
+    // aggregation now has an independent apple_health lane to read.
+    expect(await readingRows()).toEqual([
+      { source: "apple_health", metric: "step_count", value: "10432" },
+    ]);
+    expect(await syncRuns()).toEqual([
+      { source: "apple_health", status: "success", rows_synced: 1, error_message: null },
+    ]);
+    expect(sendSyncFailureAlert).not.toHaveBeenCalled();
+  });
+
+  it("attributes a bad step-count point to the apple_health lane, not whoop", async () => {
+    const payload = {
+      data: {
+        metrics: [
+          { name: "step_count", units: "count", data: [{ date: "2026-07-09 07:30:00 -0500" }] },
+          { name: "resting_heart_rate", units: "bpm", data: [point("2026-07-09", 51)] },
+        ],
+      },
+    };
+    const res = await POST(ingestRequest(JSON.stringify(payload), SECRET));
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.status).toBe("partial");
+    expect(body.sources.apple_health.status).toBe("failure");
+    expect(await syncRuns()).toEqual([
+      {
+        source: "apple_health",
+        status: "failure",
+        rows_synced: 0,
+        error_message: "step_count (2026-07-09): data point has no numeric value",
+      },
+      { source: "whoop", status: "success", rows_synced: 1, error_message: null },
+    ]);
+    expect(sendSyncFailureAlert).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("POST /api/ingest/health — rejected requests", () => {
-  it("returns 401 on a bad api key, logs failure runs for both sources, and alerts", async () => {
+  it("returns 401 on a bad api key, logs failure runs for every source lane, and alerts", async () => {
     const res = await POST(ingestRequest(JSON.stringify(fullPayload), "wrong-key"));
 
     expect(res.status).toBe(401);
     expect(await readingRows()).toEqual([]);
-    expect(await syncRuns()).toEqual([
-      {
-        source: "fitdays",
+    expect(await syncRuns()).toEqual(
+      ["apple_health", "fitdays", "whoop"].map((source) => ({
+        source,
         status: "failure",
         rows_synced: 0,
         error_message: "unauthorized: missing or invalid x-api-key header",
-      },
-      {
-        source: "whoop",
-        status: "failure",
-        rows_synced: 0,
-        error_message: "unauthorized: missing or invalid x-api-key header",
-      },
-    ]);
+      })),
+    );
     expect(sendSyncFailureAlert).toHaveBeenCalledTimes(1);
   });
 
@@ -201,6 +251,7 @@ describe("POST /api/ingest/health — rejected requests", () => {
     expect(await readingRows()).toEqual([]);
     const runs = await syncRuns();
     expect(runs.map((run) => [run.source, run.status])).toEqual([
+      ["apple_health", "failure"],
       ["fitdays", "failure"],
       ["whoop", "failure"],
     ]);

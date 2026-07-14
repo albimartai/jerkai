@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  extractReadingDate,
   mapHealthExportPayload,
   type HealthExportDataPoint,
   type HealthExportPayload,
@@ -13,6 +14,47 @@ function payloadWith(
 }
 
 const POINT = { date: "2026-07-09 07:30:00 -0500", qty: 42 };
+
+describe("extractReadingDate — device-local calendar day convention", () => {
+  it("keeps the local day for a reading shortly after local midnight", () => {
+    // 00:12 local on the 15th is still 05:12 UTC on the 15th here, but the
+    // point of the convention is that UTC never enters the picture at all:
+    // the local date component is stored verbatim.
+    expect(extractReadingDate({ date: "2025-07-15 00:12:00 -0500" })).toBe("2025-07-15");
+  });
+
+  it("keeps the local day for an evening reading whose UTC day is the NEXT day", () => {
+    // 23:31 -0500 is 04:31 UTC on the 12th — truncating against UTC would
+    // mis-bucket this onto 2026-07-12. 1,918 backfilled Production rows sit
+    // in this window.
+    expect(extractReadingDate({ date: "2026-07-11 23:31:00 -0500" })).toBe("2026-07-11");
+  });
+
+  it("accepts both DST offsets Health Auto Export actually sends, and positive offsets", () => {
+    expect(extractReadingDate({ date: "2026-01-15 06:00:00 -0600" })).toBe("2026-01-15");
+    expect(extractReadingDate({ date: "2026-07-09 07:30:00 +0200" })).toBe("2026-07-09");
+  });
+
+  it("accepts a bare date (aggregated sleep_analysis format)", () => {
+    expect(extractReadingDate({ date: "2026-07-09" })).toBe("2026-07-09");
+  });
+
+  it("rejects ISO-8601/UTC formats whose leading component is the UTC day", () => {
+    // If Health Auto Export ever switched to UTC timestamps, silently slicing
+    // the first 10 chars would shift evening readings onto the wrong day —
+    // these must fail loudly (ingest error + alert) instead.
+    expect(extractReadingDate({ date: "2026-07-12T04:31:00Z" })).toBeNull();
+    expect(extractReadingDate({ date: "2026-07-12T04:31:00+00:00" })).toBeNull();
+    expect(extractReadingDate({ date: "2026-07-12 04:31:00Z" })).toBeNull();
+  });
+
+  it("rejects missing, non-string, and malformed dates", () => {
+    expect(extractReadingDate({})).toBeNull();
+    expect(extractReadingDate({ date: undefined })).toBeNull();
+    expect(extractReadingDate({ date: "not-a-date" })).toBeNull();
+    expect(extractReadingDate({ date: "2026-7-9 07:30:00 -0500" })).toBeNull();
+  });
+});
 
 describe("mapHealthExportPayload — source/metric tagging", () => {
   // Every field name currently sent by Health Auto Export that the app maps,

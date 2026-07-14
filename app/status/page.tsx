@@ -2,12 +2,11 @@ import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
 import { getSql } from "@/lib/db";
+import { READING_SOURCES } from "@/lib/health-export";
 
 // Always query at request time — this page must reflect the live database,
 // never a build-time snapshot.
 export const dynamic = "force-dynamic";
-
-const SYNC_SOURCES = ["fitdays", "whoop"] as const;
 
 type SyncSummaryRow = {
   source: string;
@@ -41,11 +40,13 @@ export default async function Status() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-6 font-sans">
       <h1 className="text-lg text-zinc-500">Sync status</h1>
-      {SYNC_SOURCES.map((source) => {
+      {READING_SOURCES.map((source) => {
         const row = bySource.get(source);
         return (
           <div key={source} className="text-center">
-            <p className="text-2xl font-semibold tracking-tight capitalize">{source}</p>
+            <p className="text-2xl font-semibold tracking-tight capitalize">
+              {source.replaceAll("_", " ")}
+            </p>
             <p className="text-sm text-zinc-500">
               Last successful sync: {row?.last_success ?? "never"}
             </p>
