@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   extractReadingDate,
   mapHealthExportPayload,
+  mergeDailyPoints,
   type HealthExportDataPoint,
   type HealthExportPayload,
 } from "@/lib/health-export";
@@ -75,6 +76,9 @@ describe("mapHealthExportPayload — source/metric tagging", () => {
       payloadWith([{ name, units: "unit", data: [POINT] }]),
     );
     expect(result.errors).toEqual([]);
+    // step_count is cumulative: even a single point lands as a summed day
+    // with its samples preserved under points.
+    const cumulative = name === "step_count";
     expect(result.readings).toEqual([
       {
         source,
@@ -82,7 +86,8 @@ describe("mapHealthExportPayload — source/metric tagging", () => {
         readingDate: "2026-07-09",
         value: 42,
         unit: "unit",
-        rawPayload: POINT,
+        aggregation: cumulative ? "sum" : "latest",
+        rawPayload: cumulative ? { points: [POINT] } : POINT,
       },
     ]);
   });
@@ -100,6 +105,7 @@ describe("mapHealthExportPayload — source/metric tagging", () => {
         readingDate: "2026-07-09",
         value: 7.4,
         unit: "hr",
+        aggregation: "latest",
         rawPayload: point,
       },
     ]);
@@ -128,6 +134,120 @@ describe("mapHealthExportPayload — source/metric tagging", () => {
     expect(result.readings).toHaveLength(allMapped.length);
     expect(result.ignoredMetrics).toEqual([]);
     expect(result.errors).toEqual([]);
+  });
+});
+
+describe("mapHealthExportPayload — cumulative step_count aggregation", () => {
+  const steps = (time: string, qty: number) => ({ date: `2026-07-09 ${time} -0500`, qty });
+
+  it("sums multiple same-day points into one reading and preserves every sample", () => {
+    const points = [steps("08:00:00", 512.25), steps("12:30:00", 3011), steps("22:15:00", 96.5)];
+    const result = mapHealthExportPayload(
+      payloadWith([{ name: "step_count", units: "count", data: points }]),
+    );
+    expect(result.errors).toEqual([]);
+    expect(result.readings).toEqual([
+      {
+        source: "apple_health",
+        metric: "step_count",
+        readingDate: "2026-07-09",
+        value: 512.25 + 3011 + 96.5,
+        unit: "count",
+        aggregation: "sum",
+        rawPayload: { points },
+      },
+    ]);
+  });
+
+  it("groups points into separate readings per local day", () => {
+    const result = mapHealthExportPayload(
+      payloadWith([
+        {
+          name: "step_count",
+          units: "count",
+          data: [
+            steps("23:50:00", 100),
+            { date: "2026-07-10 00:10:00 -0500", qty: 40 },
+            { date: "2026-07-10 09:00:00 -0500", qty: 5000 },
+          ],
+        },
+      ]),
+    );
+    expect(result.errors).toEqual([]);
+    expect(
+      result.readings.map((r) => [r.readingDate, r.value]),
+    ).toEqual([
+      ["2026-07-09", 100],
+      ["2026-07-10", 5040],
+    ]);
+  });
+
+  it("reports malformed points per-point and still sums the good ones", () => {
+    const result = mapHealthExportPayload(
+      payloadWith([
+        {
+          name: "step_count",
+          units: "count",
+          data: [
+            steps("08:00:00", 512),
+            { date: "2026-07-09 09:00:00 -0500" }, // no qty
+            { qty: 33 }, // no date
+            steps("10:00:00", 88),
+          ],
+        },
+      ]),
+    );
+    expect(result.errors).toEqual([
+      "step_count (2026-07-09): data point has no numeric value",
+      "step_count: data point has no parseable date",
+    ]);
+    expect(result.readings).toHaveLength(1);
+    expect(result.readings[0].value).toBe(600);
+  });
+});
+
+describe("mergeDailyPoints — cross-call accumulation without double-counting", () => {
+  const a = { date: "2026-07-09 08:00:00 -0500", qty: 500 };
+  const b = { date: "2026-07-09 12:30:00 -0500", qty: 3000 };
+  const c = { date: "2026-07-09 22:15:00 -0500", qty: 100 };
+
+  it("accumulates disjoint batches (a day split across Since Last Sync calls)", () => {
+    const first = mergeDailyPoints(undefined, [a, b]);
+    expect(first.total).toBe(3500);
+    const second = mergeDailyPoints({ points: first.points }, [c]);
+    expect(second.total).toBe(3600);
+    expect(second.points).toEqual([a, b, c]);
+  });
+
+  it("is idempotent on a full re-send: same timestamps replace, never add", () => {
+    const first = mergeDailyPoints(undefined, [a, b, c]);
+    const resend = mergeDailyPoints({ points: first.points }, [a, b, c]);
+    expect(resend.total).toBe(3600);
+    expect(resend.points).toEqual([a, b, c]);
+  });
+
+  it("lets an incoming sample with an existing timestamp win (recomputed re-export)", () => {
+    const first = mergeDailyPoints(undefined, [a, b]);
+    const updated = mergeDailyPoints({ points: first.points }, [{ ...b, qty: 2500 }]);
+    expect(updated.total).toBe(3000);
+  });
+
+  it("folds a legacy pre-fix single-point raw_payload into the merge", () => {
+    // Pre-fix rows stored one sample object directly; a re-export of the day
+    // carries the same timestamp, so the legacy sample is replaced in place.
+    const legacy = { date: "2026-07-09 22:15:00 -0500", qty: 12.5, source: "Albi iPhone" };
+    const merged = mergeDailyPoints(legacy, [a, b, { ...c }]);
+    expect(merged.total).toBe(3600);
+    expect(merged.points).toEqual([a, b, c]);
+  });
+
+  it("ignores unusable stored payloads and non-numeric stored qty", () => {
+    expect(mergeDailyPoints(null, [a]).total).toBe(500);
+    expect(mergeDailyPoints("garbage", [a]).total).toBe(500);
+    expect(mergeDailyPoints({ points: "nope" }, [a]).total).toBe(500);
+    const merged = mergeDailyPoints({ points: [{ date: "2026-07-09 01:00:00 -0500" }] }, [a]);
+    expect(merged.total).toBe(500);
+    expect(merged.points).toHaveLength(2);
   });
 });
 

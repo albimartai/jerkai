@@ -33,6 +33,7 @@ Unified-schema conventions (verified against real ingested history, 2026-07-14):
 - **Timezone:** `reading_date` is the device-local calendar day. Health Auto Export sends timestamps as local time with an explicit UTC offset (`yyyy-MM-dd HH:mm:ss ±HHMM`), and the leading date component is stored as-is. It is never derived from UTC, so a reading taken shortly after midnight local time lands on the correct local day. The parser rejects UTC/ISO-8601 date formats outright, so a format change would fail loudly (ingest error + alert) rather than silently shifting evening readings to the next UTC day.
 - **Units:** `value` and `unit` are stored exactly as sent, never converted. Weight and lean body mass arrive uniformly in `lb` across all history.
 - **Raw data:** `raw_payload` preserves each data point exactly as received. Normalization is always additive, never a replacement, the same principle the dashboard applies by showing raw readings alongside computed trends.
+- **Cumulative metrics:** step count arrives as many interval samples per day, split across "Since Last Sync" runs, so its daily `value` is a sum over samples merged by timestamp (`raw_payload` holds every contributing sample under `points`). Merging is idempotent: a full re-send replaces sample-for-sample instead of double-counting, and an incremental batch adds only what it newly carries.
 
 - `npm run migrate` applies pending migrations (uses `DATABASE_URL` from `.env.local`)
 - `npm run migrate:create <name>` scaffolds a new migration

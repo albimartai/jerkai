@@ -4,7 +4,9 @@ import { getSql } from "@/lib/db";
 import { sendSyncFailureAlert } from "@/lib/alerts";
 import {
   mapHealthExportPayload,
+  mergeDailyPoints,
   READING_SOURCES,
+  type DailyPoints,
   type HealthExportPayload,
   type MappedReading,
   type ReadingSource,
@@ -68,12 +70,35 @@ async function recordRejectedRequest(startedAt: Date, reason: string): Promise<v
 
 async function upsertReading(reading: MappedReading): Promise<void> {
   const sql = getSql();
+
+  let { value, rawPayload } = reading;
+  if (reading.aggregation === "sum") {
+    // Cumulative metric: a day's samples split across "Since Last Sync"
+    // calls, so overwriting would drop everything from earlier calls (the
+    // bug that corrupted the step_count backfill). Merge with the stored
+    // samples by timestamp and recompute the day's total. The read-then-
+    // write pair is not atomic, but the only client is a single phone
+    // sending sequential requests; a lost race re-heals on the next re-send
+    // because merging is idempotent.
+    const existing = await sql`
+      select raw_payload from biometric_readings
+      where source = ${reading.source} and metric = ${reading.metric}
+        and reading_date = ${reading.readingDate}
+    `;
+    const merged = mergeDailyPoints(
+      existing[0]?.raw_payload,
+      (reading.rawPayload as DailyPoints).points,
+    );
+    value = merged.total;
+    rawPayload = { points: merged.points };
+  }
+
   // Idempotent per (source, metric, date): Health Auto Export re-sends the
   // current day on every scheduled run, and the backfill will overlap days.
   await sql`
     insert into biometric_readings (source, metric, reading_date, value, unit, raw_payload)
     values (${reading.source}, ${reading.metric}, ${reading.readingDate},
-            ${reading.value}, ${reading.unit}, ${JSON.stringify(reading.rawPayload)}::jsonb)
+            ${value}, ${reading.unit}, ${JSON.stringify(rawPayload)}::jsonb)
     on conflict (source, metric, reading_date)
     do update set value = excluded.value,
                   unit = excluded.unit,

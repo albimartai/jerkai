@@ -193,6 +193,172 @@ describe("POST /api/ingest/health — apple_health (step count) lane", () => {
     expect(sendSyncFailureAlert).not.toHaveBeenCalled();
   });
 
+  it("sums multiple same-day step samples into one row and preserves them in raw_payload", async () => {
+    const payload = {
+      data: {
+        metrics: [
+          {
+            name: "step_count",
+            units: "count",
+            data: [
+              { date: "2026-07-09 08:00:00 -0500", qty: 512.25 },
+              { date: "2026-07-09 12:30:00 -0500", qty: 3011 },
+              { date: "2026-07-09 22:15:00 -0500", qty: 96.5 },
+            ],
+          },
+        ],
+      },
+    };
+    const res = await POST(ingestRequest(JSON.stringify(payload), SECRET));
+
+    expect(res.status).toBe(200);
+    const rows = await sql`
+      select value::text as value, raw_payload from biometric_readings
+      where source = 'apple_health' and metric = 'step_count'
+    `;
+    expect(rows).toHaveLength(1);
+    expect(rows[0].value).toBe("3619.75");
+    expect(rows[0].raw_payload.points).toHaveLength(3);
+  });
+
+  it("stays idempotent when the identical payload is re-sent (no double-counting)", async () => {
+    const payload = {
+      data: {
+        metrics: [
+          {
+            name: "step_count",
+            units: "count",
+            data: [
+              { date: "2026-07-09 08:00:00 -0500", qty: 500 },
+              { date: "2026-07-09 12:30:00 -0500", qty: 3000 },
+            ],
+          },
+        ],
+      },
+    };
+    await POST(ingestRequest(JSON.stringify(payload), SECRET));
+    const res = await POST(ingestRequest(JSON.stringify(payload), SECRET));
+
+    expect(res.status).toBe(200);
+    const rows = await sql`
+      select value::text as value from biometric_readings
+      where source = 'apple_health' and metric = 'step_count'
+    `;
+    expect(rows).toEqual([{ value: "3500" }]);
+  });
+
+  it("accumulates a day split across two Since-Last-Sync calls without losing either half", async () => {
+    const call = (points: { date: string; qty: number }[]) => ({
+      data: { metrics: [{ name: "step_count", units: "count", data: points }] },
+    });
+    // Morning half arrives on the first sync, afternoon half on the next —
+    // Health Auto Export's documented incremental behavior.
+    await POST(
+      ingestRequest(
+        JSON.stringify(call([{ date: "2026-07-09 08:00:00 -0500", qty: 4000 }])),
+        SECRET,
+      ),
+    );
+    const res = await POST(
+      ingestRequest(
+        JSON.stringify(
+          call([
+            { date: "2026-07-09 15:00:00 -0500", qty: 5000 },
+            { date: "2026-07-09 21:00:00 -0500", qty: 1500 },
+          ]),
+        ),
+        SECRET,
+      ),
+    );
+
+    expect(res.status).toBe(200);
+    const rows = await sql`
+      select value::text as value, raw_payload from biometric_readings
+      where source = 'apple_health' and metric = 'step_count'
+    `;
+    expect(rows).toHaveLength(1);
+    expect(rows[0].value).toBe("10500");
+    expect(rows[0].raw_payload.points.map((p: { date: string }) => p.date)).toEqual([
+      "2026-07-09 08:00:00 -0500",
+      "2026-07-09 15:00:00 -0500",
+      "2026-07-09 21:00:00 -0500",
+    ]);
+  });
+
+  it("heals a legacy pre-fix row (single-sample raw_payload) on re-export without double-counting", async () => {
+    // Production's pre-fix step rows hold one interval sample as raw_payload
+    // and its qty as value. A re-export of that day includes the same sample
+    // timestamp, so the merge replaces it in place and the corrected total
+    // overwrites the wrong value.
+    await sql`
+      insert into biometric_readings (source, metric, reading_date, value, unit, raw_payload)
+      values ('apple_health', 'step_count', '2026-07-09', 12.5, 'count',
+              '{"qty": 12.5, "date": "2026-07-09 22:15:00 -0500", "source": "Albi iPhone"}'::jsonb)
+    `;
+    const payload = {
+      data: {
+        metrics: [
+          {
+            name: "step_count",
+            units: "count",
+            data: [
+              { date: "2026-07-09 08:00:00 -0500", qty: 4000 },
+              { date: "2026-07-09 22:15:00 -0500", qty: 12.5, source: "Albi iPhone" },
+            ],
+          },
+        ],
+      },
+    };
+    const res = await POST(ingestRequest(JSON.stringify(payload), SECRET));
+
+    expect(res.status).toBe(200);
+    const rows = await sql`
+      select value::text as value, raw_payload from biometric_readings
+      where source = 'apple_health' and metric = 'step_count'
+    `;
+    expect(rows).toHaveLength(1);
+    expect(rows[0].value).toBe("4012.5");
+    expect(rows[0].raw_payload.points).toHaveLength(2);
+  });
+
+  it("degrades to partial on mixed valid/invalid step points, landing the valid sum", async () => {
+    const payload = {
+      data: {
+        metrics: [
+          {
+            name: "step_count",
+            units: "count",
+            data: [
+              { date: "2026-07-09 08:00:00 -0500", qty: 4000 },
+              { date: "2026-07-09 09:00:00 -0500" }, // no qty
+              { date: "2026-07-09 10:00:00 -0500", qty: 250 },
+            ],
+          },
+        ],
+      },
+    };
+    const res = await POST(ingestRequest(JSON.stringify(payload), SECRET));
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.status).toBe("partial");
+    expect(body.sources.apple_health.status).toBe("partial");
+    const rows = await sql`
+      select value::text as value from biometric_readings
+      where source = 'apple_health' and metric = 'step_count'
+    `;
+    expect(rows).toEqual([{ value: "4250" }]);
+    expect(await syncRuns()).toEqual([
+      {
+        source: "apple_health",
+        status: "partial",
+        rows_synced: 1,
+        error_message: "step_count (2026-07-09): data point has no numeric value",
+      },
+    ]);
+    expect(sendSyncFailureAlert).toHaveBeenCalledTimes(1);
+  });
+
   it("attributes a bad step-count point to the apple_health lane, not whoop", async () => {
     const payload = {
       data: {
