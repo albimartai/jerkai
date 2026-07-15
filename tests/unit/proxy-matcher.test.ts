@@ -30,6 +30,11 @@ describe("proxy matcher", () => {
     "/signin/sent",
     "/api/auth/callback/resend",
     "/api/ingest/health",
+    // Whoop's OAuth redirect target and Vercel Cron's sync target carry no
+    // session; each has its own auth (state cookie + session check, and
+    // CRON_SECRET bearer, respectively).
+    "/api/whoop/callback",
+    "/api/whoop/sync",
     "/favicon.ico",
   ])("leaves %s reachable without a session", (pathname) => {
     expect(gated(pathname)).toBe(false);
@@ -43,6 +48,12 @@ describe("proxy matcher", () => {
     "/privacy/anything",
     "/privacy-policy",
     "/privacypolicy",
+    // Only a signed-in session may INITIATE a Whoop connection — the
+    // callback/sync exclusions are exact matches and must not leak here.
+    "/api/whoop/connect",
+    "/api/whoop/callback/extra",
+    "/api/whoop/sync-anything",
+    "/api/whoop",
     "/some/future/route",
   ])("keeps %s behind the session gate", (pathname) => {
     expect(gated(pathname)).toBe(true);

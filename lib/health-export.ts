@@ -2,6 +2,17 @@
 // biometric_readings rows. Field names follow the schema published at
 // github.com/Lybron/health-auto-export (wiki: API Export — JSON Format).
 //
+// As of Session 8 this pipe carries FITDAYS DATA ONLY (weight, body fat %,
+// BMI, lean body mass). Everything Whoop-related moved to the direct Whoop
+// API integration (lib/whoop-*.ts): Whoop never wrote HRV or step count to
+// HealthKit at all, and RHR/sleep now come from Whoop's own API — so the
+// old heart_rate_variability / resting_heart_rate / sleep_analysis /
+// step_count mappings are gone ON PURPOSE. Removing them (rather than
+// leaving them dormant) means a stray phone-side re-export can neither
+// recreate the deleted apple_health step_count rows nor overwrite
+// authoritative Whoop-direct rows with HealthKit-merged values; retired
+// metrics now land in ignoredMetrics, visibly.
+//
 // Timezone convention (unified schema, decided 2026-07-14): reading_date is
 // the DEVICE-LOCAL calendar day. Health Auto Export sends timestamps as
 // local time with an explicit UTC offset ("yyyy-MM-dd HH:mm:ss ±HHMM" —
@@ -13,10 +24,12 @@
 // bucketing evening readings onto the next UTC day.
 //
 // Storage shapes: single-measurement metrics store their one data point as
-// raw_payload verbatim. Cumulative metrics (aggregation: "sum", currently
-// step_count) store raw_payload = {points: [...]} with every contributing
-// sample verbatim, and value = the sum over the merged samples — see
-// mergeDailyPoints for why overwriting is never safe for these.
+// raw_payload verbatim. Cumulative metrics (aggregation: "sum") store
+// raw_payload = {points: [...]} with every contributing sample verbatim, and
+// value = the sum over the merged samples — see mergeDailyPoints for why
+// overwriting is never safe for these. No currently-mapped metric is
+// cumulative (step_count, which the machinery was built for in Session 6,
+// retired in Session 8) — the machinery stays for the next cumulative pipe.
 //
 // Unit convention: values and units are stored exactly as sent, never
 // converted. Verified against all Production history 2026-07-14:
@@ -25,8 +38,10 @@
 // column remains the source of truth should Health Auto Export's unit
 // settings ever change.
 
+import type { ReadingSource } from "@/lib/sources";
+
 export type HealthExportDataPoint = {
-  date?: string; // "yyyy-MM-dd HH:mm:ss Z" (or "yyyy-MM-dd" for aggregated sleep)
+  date?: string; // "yyyy-MM-dd HH:mm:ss Z" (or bare "yyyy-MM-dd")
   qty?: number;
   [key: string]: unknown;
 };
@@ -43,15 +58,16 @@ export type HealthExportPayload = {
   };
 };
 
-// Every source that can appear in biometric_readings and sync_runs. The
-// ingest route logs one sync_runs row per source per run, and /status
-// renders one lane per source — keep all three in sync via this list.
-export const READING_SOURCES = ["fitdays", "whoop", "apple_health"] as const;
+// The sync_runs lanes this pipe can produce — every source that appears as a
+// value in METRIC_MAP. Rejected requests (bad secret, malformed body) log a
+// failure row for each of these, and only these: the whoop lane belongs to
+// the Whoop sync route now, and a broken phone export must not poison it.
+export const HEALTH_EXPORT_SOURCES = ["fitdays"] as const satisfies readonly ReadingSource[];
 
-export type ReadingSource = (typeof READING_SOURCES)[number];
+export type HealthExportSource = (typeof HEALTH_EXPORT_SOURCES)[number];
 
-// Cumulative metrics (step_count) store every contributing sample; single-
-// measurement metrics store the one data point exactly as received.
+// Cumulative metrics store every contributing sample; single-measurement
+// metrics store the one data point exactly as received.
 export type DailyPoints = { points: HealthExportDataPoint[] };
 
 // How a metric's value relates to its data points within one calendar day:
@@ -62,7 +78,7 @@ export type DailyPoints = { points: HealthExportDataPoint[] };
 export type DailyAggregation = "latest" | "sum";
 
 export type MappedReading = {
-  source: ReadingSource;
+  source: HealthExportSource;
   metric: string;
   readingDate: string; // yyyy-MM-dd
   value: number;
@@ -77,13 +93,11 @@ export type MappedPayload = {
   errors: string[];
 };
 
-// Device attribution is by metric type, not by HealthKit's per-point source
-// string: body composition only comes from the Fitdays scale, HRV/RHR/sleep
-// only from Whoop, and step_count is HealthKit's merged cross-device
-// aggregate, so it's tagged 'apple_health' rather than either device.
+// Body composition comes only from the Fitdays scale — the sole remaining
+// Apple Health data. See the header for why the Whoop-era mappings are gone.
 const METRIC_MAP: Record<
   string,
-  { source: ReadingSource; metric: string; aggregation?: "sum" }
+  { source: HealthExportSource; metric: string; aggregation?: "sum" }
 > = {
   weight_body_mass: { source: "fitdays", metric: "weight" },
   body_fat_percentage: { source: "fitdays", metric: "body_fat_pct" },
@@ -94,26 +108,12 @@ const METRIC_MAP: Record<
   // spot-checked day, so it is genuinely Lean Body Mass, not Fitdays'
   // separate "Muscle Mass" reading. The stored name is correct.
   lean_body_mass: { source: "fitdays", metric: "lean_body_mass" },
-  heart_rate_variability: { source: "whoop", metric: "hrv" },
-  resting_heart_rate: { source: "whoop", metric: "rhr" },
-  // step_count is cumulative: HealthKit reports it as many interval samples
-  // per day (fractional qty from cross-device dedup weighting), and Health
-  // Auto Export's "Since Last Sync" automation splits a day's samples across
-  // runs. The daily value is therefore a sum over merged samples — a plain
-  // per-day overwrite keeps only the last sample (the Session 5 bug that
-  // corrupted all backfilled step counts).
-  step_count: { source: "apple_health", metric: "step_count", aggregation: "sum" },
 };
-
-// Whoop's "sleep performance %" is proprietary and never reaches HealthKit
-// (same reason Recovery Score doesn't), so the sleep guardrail stores total
-// sleep duration from sleep_analysis instead.
-const SLEEP_METRIC_NAME = "sleep_analysis";
 
 // Accepted date shapes, both of which make the leading component the
 // device-local calendar day:
 //   "yyyy-MM-dd HH:mm:ss ±HHMM"  — Health Auto Export's standard format
-//   "yyyy-MM-dd"                 — aggregated sleep_analysis
+//   "yyyy-MM-dd"                 — aggregated daily rows
 // Anything else (notably ISO-8601 "yyyy-MM-ddTHH:mm:ssZ", whose leading
 // component would be the UTC day) is rejected so it surfaces as an ingest
 // error rather than a silently wrong reading_date.
@@ -125,21 +125,6 @@ const LOCAL_DAY_FORMAT = /^(\d{4}-\d{2}-\d{2})( \d{2}:\d{2}:\d{2} [+-]\d{4})?$/;
 export function extractReadingDate(point: HealthExportDataPoint): string | null {
   const raw = typeof point.date === "string" ? point.date : null;
   return raw?.match(LOCAL_DAY_FORMAT)?.[1] ?? null;
-}
-
-function extractSleepDuration(point: HealthExportDataPoint): number | null {
-  // Aggregated sleep_analysis reports durations per phase; totalSleep (or the
-  // uncategorized `asleep`) is the whole-night figure. Fall back to summing
-  // phases for sources that only send the breakdown.
-  for (const key of ["totalSleep", "asleep"]) {
-    const value = point[key];
-    if (typeof value === "number") return value;
-  }
-  const phases = ["core", "rem", "deep"]
-    .map((key) => point[key])
-    .filter((value): value is number => typeof value === "number");
-  if (phases.length > 0) return phases.reduce((sum, value) => sum + value, 0);
-  return null;
 }
 
 // Coerces a stored raw_payload into its list of samples: the current
@@ -198,10 +183,7 @@ export function mapHealthExportPayload(payload: HealthExportPayload): MappedPayl
   for (const metric of metrics) {
     const name = metric.name ?? "(unnamed)";
     const points = Array.isArray(metric.data) ? metric.data : [];
-    const isSleep = name === SLEEP_METRIC_NAME;
-    const mapping: (typeof METRIC_MAP)[string] | undefined = isSleep
-      ? { source: "whoop", metric: "sleep_duration" }
-      : METRIC_MAP[name];
+    const mapping = METRIC_MAP[name];
 
     if (!mapping) {
       ignoredMetrics.push(name);
@@ -219,7 +201,7 @@ export function mapHealthExportPayload(payload: HealthExportPayload): MappedPayl
         errors.push(`${name}: data point has no parseable date`);
         continue;
       }
-      const value = isSleep ? extractSleepDuration(point) : point.qty;
+      const value = point.qty;
       if (typeof value !== "number" || !Number.isFinite(value)) {
         errors.push(`${name} (${readingDate}): data point has no numeric value`);
         continue;

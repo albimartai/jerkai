@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
 import { getSql } from "@/lib/db";
-import { READING_SOURCES } from "@/lib/health-export";
+import { ACTIVE_SYNC_SOURCES } from "@/lib/sources";
 
 // Always query at request time — this page must reflect the live database,
 // never a build-time snapshot.
@@ -40,7 +40,10 @@ export default async function Status() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-6 font-sans">
       <h1 className="text-lg text-zinc-500">Sync status</h1>
-      {READING_SOURCES.map((source) => {
+      {/* One lane per LIVE pipe (see lib/sources.ts) — retired sources like
+          apple_health keep their historical sync_runs rows but no longer
+          render a permanently-stale lane here. */}
+      {ACTIVE_SYNC_SOURCES.map((source) => {
         const row = bySource.get(source);
         return (
           <div key={source} className="text-center">

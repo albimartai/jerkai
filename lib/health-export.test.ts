@@ -36,7 +36,7 @@ describe("extractReadingDate — device-local calendar day convention", () => {
     expect(extractReadingDate({ date: "2026-07-09 07:30:00 +0200" })).toBe("2026-07-09");
   });
 
-  it("accepts a bare date (aggregated sleep_analysis format)", () => {
+  it("accepts a bare date (aggregated daily format)", () => {
     expect(extractReadingDate({ date: "2026-07-09" })).toBe("2026-07-09");
   });
 
@@ -57,7 +57,7 @@ describe("extractReadingDate — device-local calendar day convention", () => {
   });
 });
 
-describe("mapHealthExportPayload — source/metric tagging", () => {
+describe("mapHealthExportPayload — source/metric tagging (Fitdays-only pipe)", () => {
   // Every field name currently sent by Health Auto Export that the app maps,
   // with the source/metric pair each must land under. A new mapping added to
   // METRIC_MAP without a row here should fail the count test below.
@@ -66,9 +66,6 @@ describe("mapHealthExportPayload — source/metric tagging", () => {
     ["body_fat_percentage", "fitdays", "body_fat_pct"],
     ["body_mass_index", "fitdays", "bmi"],
     ["lean_body_mass", "fitdays", "lean_body_mass"],
-    ["heart_rate_variability", "whoop", "hrv"],
-    ["resting_heart_rate", "whoop", "rhr"],
-    ["step_count", "apple_health", "step_count"],
   ];
 
   it.each(expectedTags)("tags %s as %s/%s", (name, source, metric) => {
@@ -76,9 +73,6 @@ describe("mapHealthExportPayload — source/metric tagging", () => {
       payloadWith([{ name, units: "unit", data: [POINT] }]),
     );
     expect(result.errors).toEqual([]);
-    // step_count is cumulative: even a single point lands as a summed day
-    // with its samples preserved under points.
-    const cumulative = name === "step_count";
     expect(result.readings).toEqual([
       {
         source,
@@ -86,127 +80,51 @@ describe("mapHealthExportPayload — source/metric tagging", () => {
         readingDate: "2026-07-09",
         value: 42,
         unit: "unit",
-        aggregation: cumulative ? "sum" : "latest",
-        rawPayload: cumulative ? { points: [POINT] } : POINT,
-      },
-    ]);
-  });
-
-  it("tags sleep_analysis as whoop/sleep_duration using totalSleep", () => {
-    const point = { date: "2026-07-09", totalSleep: 7.4, core: 4, rem: 2, deep: 1 };
-    const result = mapHealthExportPayload(
-      payloadWith([{ name: "sleep_analysis", units: "hr", data: [point] }]),
-    );
-    expect(result.errors).toEqual([]);
-    expect(result.readings).toEqual([
-      {
-        source: "whoop",
-        metric: "sleep_duration",
-        readingDate: "2026-07-09",
-        value: 7.4,
-        unit: "hr",
         aggregation: "latest",
-        rawPayload: point,
+        rawPayload: POINT,
       },
     ]);
-  });
-
-  it("falls back to `asleep`, then to summing phases, for sleep_analysis", () => {
-    const asleepOnly = { date: "2026-07-08", asleep: 6.9 };
-    const phasesOnly = { date: "2026-07-09", core: 4, rem: 1.5, deep: 1 };
-    const result = mapHealthExportPayload(
-      payloadWith([{ name: "sleep_analysis", units: "hr", data: [asleepOnly, phasesOnly] }]),
-    );
-    expect(result.errors).toEqual([]);
-    expect(result.readings.map((r) => r.value)).toEqual([6.9, 6.5]);
   });
 
   it("covers exactly the currently-mapped metric names (update this test when METRIC_MAP grows)", () => {
-    const allMapped = [...expectedTags.map(([name]) => name), "sleep_analysis"];
+    const allMapped = expectedTags.map(([name]) => name);
     const result = mapHealthExportPayload(
-      payloadWith(
-        allMapped.map((name) => ({
-          name,
-          data: [name === "sleep_analysis" ? { date: "2026-07-09", totalSleep: 7 } : POINT],
-        })),
-      ),
+      payloadWith(allMapped.map((name) => ({ name, data: [POINT] }))),
     );
     expect(result.readings).toHaveLength(allMapped.length);
     expect(result.ignoredMetrics).toEqual([]);
     expect(result.errors).toEqual([]);
   });
-});
 
-describe("mapHealthExportPayload — cumulative step_count aggregation", () => {
-  const steps = (time: string, qty: number) => ({ date: `2026-07-09 ${time} -0500`, qty });
-
-  it("sums multiple same-day points into one reading and preserves every sample", () => {
-    const points = [steps("08:00:00", 512.25), steps("12:30:00", 3011), steps("22:15:00", 96.5)];
+  it("ignores every retired Whoop-era metric — they must never write rows again", () => {
+    // Session 8: HRV/RHR/sleep come from the direct Whoop API and step_count
+    // was deleted as unsalvageable. If any of these ever map again, a stray
+    // phone re-export could recreate deleted step rows or overwrite
+    // authoritative whoop-direct rows with HealthKit-merged values.
+    const retired = [
+      "heart_rate_variability",
+      "resting_heart_rate",
+      "step_count",
+      "sleep_analysis",
+    ];
     const result = mapHealthExportPayload(
-      payloadWith([{ name: "step_count", units: "count", data: points }]),
+      payloadWith(
+        retired.map((name) => ({
+          name,
+          data: [name === "sleep_analysis" ? { date: "2026-07-09", totalSleep: 7 } : POINT],
+        })),
+      ),
     );
+    expect(result.readings).toEqual([]);
     expect(result.errors).toEqual([]);
-    expect(result.readings).toEqual([
-      {
-        source: "apple_health",
-        metric: "step_count",
-        readingDate: "2026-07-09",
-        value: 512.25 + 3011 + 96.5,
-        unit: "count",
-        aggregation: "sum",
-        rawPayload: { points },
-      },
-    ]);
-  });
-
-  it("groups points into separate readings per local day", () => {
-    const result = mapHealthExportPayload(
-      payloadWith([
-        {
-          name: "step_count",
-          units: "count",
-          data: [
-            steps("23:50:00", 100),
-            { date: "2026-07-10 00:10:00 -0500", qty: 40 },
-            { date: "2026-07-10 09:00:00 -0500", qty: 5000 },
-          ],
-        },
-      ]),
-    );
-    expect(result.errors).toEqual([]);
-    expect(
-      result.readings.map((r) => [r.readingDate, r.value]),
-    ).toEqual([
-      ["2026-07-09", 100],
-      ["2026-07-10", 5040],
-    ]);
-  });
-
-  it("reports malformed points per-point and still sums the good ones", () => {
-    const result = mapHealthExportPayload(
-      payloadWith([
-        {
-          name: "step_count",
-          units: "count",
-          data: [
-            steps("08:00:00", 512),
-            { date: "2026-07-09 09:00:00 -0500" }, // no qty
-            { qty: 33 }, // no date
-            steps("10:00:00", 88),
-          ],
-        },
-      ]),
-    );
-    expect(result.errors).toEqual([
-      "step_count (2026-07-09): data point has no numeric value",
-      "step_count: data point has no parseable date",
-    ]);
-    expect(result.readings).toHaveLength(1);
-    expect(result.readings[0].value).toBe(600);
+    expect(result.ignoredMetrics).toEqual(retired);
   });
 });
 
 describe("mergeDailyPoints — cross-call accumulation without double-counting", () => {
+  // No currently-mapped metric is cumulative (step_count retired in
+  // Session 8), but the merge stays — lib/readings.ts still routes any
+  // future aggregation:"sum" metric through it.
   const a = { date: "2026-07-09 08:00:00 -0500", qty: 500 };
   const b = { date: "2026-07-09 12:30:00 -0500", qty: 3000 };
   const c = { date: "2026-07-09 22:15:00 -0500", qty: 100 };
@@ -301,34 +219,24 @@ describe("mapHealthExportPayload — malformed input", () => {
     const result = mapHealthExportPayload(
       payloadWith([
         {
-          name: "resting_heart_rate",
+          name: "body_fat_percentage",
           data: [
             { date: "2026-07-07 06:00:00 -0500" }, // no qty
             { date: "2026-07-08 06:00:00 -0500", qty: Number.NaN },
-            { date: "2026-07-09 06:00:00 -0500", qty: 51 },
+            { date: "2026-07-09 06:00:00 -0500", qty: 18.3 },
           ],
         },
       ]),
     );
     expect(result.errors).toEqual([
-      "resting_heart_rate (2026-07-07): data point has no numeric value",
-      "resting_heart_rate (2026-07-08): data point has no numeric value",
+      "body_fat_percentage (2026-07-07): data point has no numeric value",
+      "body_fat_percentage (2026-07-08): data point has no numeric value",
     ]);
-    expect(result.readings.map((r) => r.value)).toEqual([51]);
-  });
-
-  it("reports sleep_analysis points with no usable duration fields", () => {
-    const result = mapHealthExportPayload(
-      payloadWith([{ name: "sleep_analysis", data: [{ date: "2026-07-09", inBed: 8.1 }] }]),
-    );
-    expect(result.errors).toEqual([
-      "sleep_analysis (2026-07-09): data point has no numeric value",
-    ]);
-    expect(result.readings).toEqual([]);
+    expect(result.readings.map((r) => r.value)).toEqual([18.3]);
   });
 
   it("handles a metric with a missing data array", () => {
-    const result = mapHealthExportPayload(payloadWith([{ name: "step_count" }]));
+    const result = mapHealthExportPayload(payloadWith([{ name: "weight_body_mass" }]));
     expect(result.readings).toEqual([]);
     expect(result.errors).toEqual([]);
     expect(result.ignoredMetrics).toEqual([]);

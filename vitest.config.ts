@@ -26,6 +26,9 @@ export default defineConfig({
           include: ["tests/integration/**/*.test.ts"],
           testTimeout: 30_000,
           hookTimeout: 60_000,
+          // All integration files share one database and truncate tables
+          // between cases — parallel files would wipe each other mid-test.
+          fileParallelism: false,
         },
       },
     ],

@@ -10,6 +10,14 @@ import { auth } from "@/auth";
 // stay reachable without a session:
 //   - /api/ingest/health: machine-to-machine, has its own x-api-key auth
 //   - /api/auth/*: Auth.js's own sign-in/callback routes
+//   - /api/whoop/callback: Whoop's OAuth redirect target — Whoop must reach
+//     it even when the session cookie is stale (a 307 to /signin would
+//     strand the one-time code); it verifies the state cookie + session
+//     itself. Exact match, so /api/whoop/connect STAYS gated (only a
+//     signed-in session may initiate a connection).
+//   - /api/whoop/sync: Vercel Cron target — cron invocations carry no
+//     session cookie and never follow redirects; it has its own CRON_SECRET
+//     bearer auth. Exact match.
 //   - /signin: where unauthenticated visitors land
 //   - /privacy: public privacy policy (WHOOP's OAuth consent flow links to
 //     it, so it must render without a session). Excluded with `privacy$` —
@@ -25,5 +33,7 @@ export default function proxy(request: NextRequest, event: NextFetchEvent) {
 }
 
 export const config = {
-  matcher: ["/((?!api/ingest|api/auth|signin|privacy$|_next/static|_next/image|favicon.ico).*)"],
+  matcher: [
+    "/((?!api/ingest|api/auth|api/whoop/callback$|api/whoop/sync$|signin|privacy$|_next/static|_next/image|favicon.ico).*)",
+  ],
 };
