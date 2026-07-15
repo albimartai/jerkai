@@ -11,6 +11,9 @@ import { auth } from "@/auth";
 //   - /api/ingest/health: machine-to-machine, has its own x-api-key auth
 //   - /api/auth/*: Auth.js's own sign-in/callback routes
 //   - /signin: where unauthenticated visitors land
+//   - /privacy: public privacy policy (WHOOP's OAuth consent flow links to
+//     it, so it must render without a session). Excluded with `privacy$` —
+//     exact match only, so /privacy/* or any future /privacy-* stays gated.
 //   - Next.js static assets and the favicon
 // Pages also re-check the session themselves (defense in depth) — see
 // app/page.tsx and app/status/page.tsx.
@@ -22,5 +25,5 @@ export default function proxy(request: NextRequest, event: NextFetchEvent) {
 }
 
 export const config = {
-  matcher: ["/((?!api/ingest|api/auth|signin|_next/static|_next/image|favicon.ico).*)"],
+  matcher: ["/((?!api/ingest|api/auth|signin|privacy$|_next/static|_next/image|favicon.ico).*)"],
 };
