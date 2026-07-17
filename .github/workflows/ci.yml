@@ -4,7 +4,20 @@
 # persistent dev/prod Neon branches or the deployed app.
 name: CI
 
-on: push
+# Run on PRs and on main. Scoping the push trigger to main (instead of
+# every branch) keeps branch pushes to a single pull_request-triggered
+# run, so required status checks attach to the PR and each push burns
+# only one disposable Neon branch.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# One run per branch: a new push cancels the superseded run (and tears
+# down its Neon branch via the always() cleanup step).
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
