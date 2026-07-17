@@ -4,7 +4,7 @@
 
 Canonical source is the vault file. This repo carries a build-time snapshot at `docs/definition-of-ready-and-done.md` (authored/refreshed by a Claude Code session), the same source-in-vault / snapshot-in-repo pattern used for build PRDs. When this standard changes, update the vault source and re-snapshot the repo copy — do not edit the two independently.
 
-**Last updated:** 2026-07-16
+**Last updated:** 2026-07-17
 
 ## Definition of Ready (entry gate)
 
@@ -32,6 +32,7 @@ A slice is done only when all of these are true, in addition to the feature-spec
 - **Raw-data-preserved** — raw values shown/stored; trends/derivations computed at render time, never overwriting raw records.
 - **Secret hygiene intact** — no secrets committed; gitleaks pre-commit + GitHub secret scanning passing.
 - **Merged via PR** (not direct to `main`), with the DoD checklist completed in the PR.
+- **Product-truth reconciliation flagged.** Any material change to product facts — scope, north-star / driver metrics, or a decision — surfaced during the slice is called out in the PR summary for reconciliation into the product brief ([docs/context.md](context.md)) and the project decision log (kept in the Career vault, not this repo). This flag is the build session's responsibility; the vault edits themselves are a PM step, **not** performed by the build agent. When the Brief changes, re-snapshot `docs/context.md` into the repo so the repo's product context doesn't drift from the vault.
 
 ## How PRDs use this
 
