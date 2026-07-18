@@ -3,18 +3,24 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
+import { DASHBOARD_CONFIG } from "@/lib/dashboard/config";
 import type { DashboardData } from "@/lib/dashboard/data";
+import { leanMassChange, recoveryReadout } from "@/lib/dashboard/readouts";
 import { rollingAverage } from "@/lib/dashboard/rolling";
 import { STRAIN_DOMAIN } from "@/lib/dashboard/strain";
 import { stallBadge } from "@/lib/dashboard/stall-badge";
-import { trendDescriptor } from "@/lib/dashboard/trend-descriptor";
+import { toPounds } from "@/lib/dashboard/units";
 
-// Direction 1c: every metric is a horizontal strip stacked on one shared
-// date axis; hovering (or touch-dragging) any strip scrubs a crosshair
-// across all of them to the same day (AC-D8). All derivations (trend lines,
-// badge, descriptors) are computed here at render time from the raw series
-// (NFR-1), and the whole window's data is already client-side, so scrubbing
-// never touches the network (NFR-6).
+// Direction 1c, v1.1 revision (signal over noise): every metric is a
+// horizontal strip stacked on one shared date axis; hovering (or
+// touch-dragging) any strip scrubs a crosshair across all of them to the
+// same day (AC-D8, AC-N11). One rendering rule everywhere (AC-N1): raw
+// daily values are low-emphasis dots and the 7-day rolling line is the
+// dominant mark — no strip renders a raw daily line as its primary mark.
+// All derivations (trend lines, badge, readout stats) are computed once per
+// data load from the raw series (NFR-1, NFR-17), and the whole window's
+// data is already client-side, so scrubbing never touches the network
+// (NFR-6).
 
 type Series = (number | null)[];
 
@@ -45,14 +51,16 @@ const lastPresent = (series: Series): { index: number; value: number } | null =>
 
 type Domain = { min: number; max: number };
 
-// Data-driven vertical domain with headroom so dots never sit on the strip
-// edge. Fixed-domain strips (strain 0–21, recovery 0–100) skip this.
+// Data-driven vertical domain (AC-N7): fitted to the observed range plus a
+// config margin so dots never sit on the strip edge — never zero-based, so
+// genuine drift stays visually detectable. Fixed-domain strips (strain
+// 0–21, recovery 0–100) skip this.
 function fitDomain(seriesList: Series[]): Domain {
   const values = seriesList.flat().filter((v): v is number => v !== null);
   if (values.length === 0) return { min: 0, max: 1 };
   const min = Math.min(...values);
   const max = Math.max(...values);
-  const pad = (max - min || Math.abs(max) || 1) * 0.12;
+  const pad = (max - min || Math.abs(max) || 1) * DASHBOARD_CONFIG.yDomainMarginFraction;
   return { min: min - pad, max: max + pad };
 }
 
@@ -81,16 +89,21 @@ function PolyLine({
   series,
   domain,
   className,
+  seriesId,
+  strokeWidth = 1.5,
 }: {
   series: Series;
   domain: Domain;
   className: string;
+  seriesId: string;
+  strokeWidth?: number;
 }) {
   return (
     <svg
       className={`absolute inset-0 h-full w-full ${className}`}
       viewBox="0 0 100 100"
       preserveAspectRatio="none"
+      data-series={seriesId}
       aria-hidden
     >
       {segments(series).map((run) =>
@@ -110,7 +123,7 @@ function PolyLine({
               .map((p) => `${xPct(p.index, series.length)},${yPct(p.value, domain)}`)
               .join(" ")}
             fill="none"
-            strokeWidth="1.5"
+            strokeWidth={strokeWidth}
             vectorEffect="non-scaling-stroke"
             className="stroke-current"
           />
@@ -179,6 +192,116 @@ function Strip({
   );
 }
 
+// Recovery zone bands (top = green, bottom = red) on Whoop's 0–100 scale.
+function ZoneBands() {
+  return (
+    <>
+      <div className="absolute inset-x-0 top-0 h-1/3 bg-emerald-500/10" />
+      <div className="absolute inset-x-0 top-1/3 h-1/3 bg-amber-500/10" />
+      <div className="absolute inset-x-0 top-2/3 h-1/3 bg-red-500/10" />
+    </>
+  );
+}
+
+type MetricStripProps = {
+  // Stable id for the chart region (also the hook for fixture render tests).
+  id: string;
+  label: string;
+  tag?: string;
+  heightClass: string;
+  raw: Series;
+  avg7: Series;
+  avg30?: Series;
+  // Fixed domain (strain 0–21, recovery 0–100); omitted = fitted (AC-N7).
+  domain?: Domain;
+  // Tailwind text-* color for the dominant 7-day line.
+  lineClass?: string;
+  zones?: boolean;
+  legend?: boolean;
+  hoverIndex: number | null;
+  axisLength: number;
+  readout: string;
+  onScrub: (index: number | null) => void;
+};
+
+// THE strip renderer (NFR-14): every chart on the dashboard — main stack
+// and Whoop detail — goes through this one component, parameterized by
+// series, domain, and emphasis. One rendering rule (AC-N1): faint raw dots,
+// dominant 7-day line, optional lighter 30-day line.
+function MetricStrip({
+  id,
+  label,
+  tag,
+  heightClass,
+  raw,
+  avg7,
+  avg30,
+  domain,
+  lineClass = "text-sky-500",
+  zones = false,
+  legend = false,
+  hoverIndex,
+  axisLength,
+  readout,
+  onScrub,
+}: MetricStripProps) {
+  const d = domain ?? fitDomain(avg30 ? [raw, avg7, avg30] : [raw, avg7]);
+  return (
+    <Strip
+      label={label}
+      tag={tag}
+      heightClass={heightClass}
+      hoverIndex={hoverIndex}
+      axisLength={axisLength}
+      readout={readout}
+      onScrub={onScrub}
+    >
+      <div data-chart={id} className="absolute inset-0">
+        {zones ? <ZoneBands /> : null}
+        {avg30 ? (
+          <PolyLine
+            series={avg30}
+            domain={d}
+            seriesId="avg30"
+            strokeWidth={1.25}
+            className="text-violet-500"
+          />
+        ) : null}
+        <PolyLine series={avg7} domain={d} seriesId="avg7" strokeWidth={2} className={lineClass} />
+        {raw.map((value, index) =>
+          value === null ? null : (
+            <span
+              key={index}
+              data-raw-dot={index}
+              className="absolute h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-zinc-400/70 dark:bg-zinc-500/70"
+              style={{
+                left: `${xPct(index, axisLength)}%`,
+                top: `${yPct(value, d)}%`,
+              }}
+            />
+          ),
+        )}
+        {legend ? (
+          <div className="pointer-events-none absolute bottom-1 left-2 z-10 flex gap-3 text-[10px] text-zinc-500">
+            <span>
+              <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-zinc-400/70 dark:bg-zinc-500/70" />
+              raw
+            </span>
+            <span>
+              <span className={`mr-1 inline-block h-0.5 w-3 -translate-y-0.5 bg-current ${lineClass}`} />
+              7-day
+            </span>
+            <span>
+              <span className="mr-1 inline-block h-0.5 w-3 -translate-y-0.5 bg-violet-500" />
+              30-day
+            </span>
+          </div>
+        ) : null}
+      </div>
+    </Strip>
+  );
+}
+
 // --- the dashboard --------------------------------------------------------
 
 const WINDOWS = [30, 90] as const;
@@ -190,21 +313,66 @@ const BADGE_TONE_CLASSES = {
   neutral: "bg-zinc-100 text-zinc-600 dark:bg-zinc-900 dark:text-zinc-400",
 } as const;
 
-export default function Dashboard({ data }: { data: DashboardData }) {
+const READOUT_TONE_CLASSES = {
+  good: "text-emerald-700 dark:text-emerald-400",
+  warning: "text-amber-700 dark:text-amber-400",
+  neutral: "text-zinc-600 dark:text-zinc-300",
+} as const;
+
+// Always one decimal so a small change reads "±0.0 lb", never "−0 lb".
+const signedLb = (delta: number) => {
+  const magnitude = Math.abs(delta).toFixed(1);
+  const sign = magnitude === "0.0" ? "±" : delta < 0 ? "−" : "+";
+  return `${sign}${magnitude} lb`;
+};
+
+export default function Dashboard({
+  data,
+  initialWhoopOpen = false,
+}: {
+  data: DashboardData;
+  // Collapsed by default (AC-N13); overridable so fixture render tests can
+  // assert the expanded Whoop-detail treatment (AC-N12) without a browser.
+  initialWhoopOpen?: boolean;
+}) {
   const [windowDays, setWindowDays] = useState<WindowDays>(30);
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
-  const [whoopOpen, setWhoopOpen] = useState(false);
+  const [whoopOpen, setWhoopOpen] = useState(initialWhoopOpen);
 
-  // Trend lines are computed over the FULL fetched history, then cut to the
-  // window — so the 7d/30d values at the window's left edge still include
-  // the days before it (AC-D3) — while the badge always reads the full
-  // 30-day trend regardless of the visible window (AC-D4–D7).
+  // Everything derived is computed ONCE per data load (NFR-17), over the
+  // FULL fetched history, then cut to the window — so the 7d/30d values at
+  // the window's left edge still include the days before it (AC-D3, AC-N2),
+  // the badge always reads the full 30-day trend regardless of the visible
+  // window (AC-D4–D7), and the readout stats don't change with the window
+  // toggle. Weight and lean mass are converted to display lb here, at
+  // render time — stored rows are untouched (NFR-16).
   const derived = useMemo(() => {
-    const raw = data.series.bodyFatPct;
+    const lb = (series: Series, unit: string | null) =>
+      series.map((v) => (v === null ? null : toPounds(v, unit)));
+    const bf = data.series.bodyFatPct;
+    const bf30 = rollingAverage(bf, 30);
+    const weightLb = lb(data.series.weight, data.units.weight);
+    const lbmLb = lb(data.series.leanBodyMass, data.units.leanBodyMass);
+    const lbm7 = rollingAverage(lbmLb, 7);
     return {
-      avg7: rollingAverage(raw, 7),
-      avg30: rollingAverage(raw, 30),
-      badge: stallBadge(rollingAverage(raw, 30)),
+      bf7: rollingAverage(bf, 7),
+      bf30,
+      badge: stallBadge(bf30),
+      weightLb,
+      weight7: rollingAverage(weightLb, 7),
+      weight30: rollingAverage(weightLb, 30),
+      strain7: rollingAverage(data.series.dayStrain, 7),
+      lbmLb,
+      lbm7,
+      lbm30: rollingAverage(lbmLb, 30),
+      recovery7: rollingAverage(data.series.recoveryScore, 7),
+      hrv7: rollingAverage(data.series.hrv, 7),
+      rhr7: rollingAverage(data.series.rhr, 7),
+      sleep7: rollingAverage(data.series.sleepDuration, 7),
+      // Guardrail readout stats (AC-N8, AC-N9), thresholds from config
+      // (NFR-16). Lean mass reads the smoothed lb series.
+      leanMass: leanMassChange(lbm7, DASHBOARD_CONFIG.leanMass),
+      recovery: recoveryReadout(data.series.recoveryScore, DASHBOARD_CONFIG.recovery),
     };
   }, [data]);
 
@@ -214,14 +382,24 @@ export default function Dashboard({ data }: { data: DashboardData }) {
   const axis = cut(data.axis);
   const s = {
     raw: cut(data.series.bodyFatPct),
-    avg7: cut(derived.avg7),
-    avg30: cut(derived.avg30),
+    avg7: cut(derived.bf7),
+    avg30: cut(derived.bf30),
+    weight: cut(derived.weightLb),
+    weight7: cut(derived.weight7),
+    weight30: cut(derived.weight30),
     strain: cut(data.series.dayStrain),
+    strain7: cut(derived.strain7),
     recovery: cut(data.series.recoveryScore),
-    lbm: cut(data.series.leanBodyMass),
+    recovery7: cut(derived.recovery7),
+    lbm: cut(derived.lbmLb),
+    lbm7: cut(derived.lbm7),
+    lbm30: cut(derived.lbm30),
     hrv: cut(data.series.hrv),
+    hrv7: cut(derived.hrv7),
     rhr: cut(data.series.rhr),
+    rhr7: cut(derived.rhr7),
     sleep: cut(data.series.sleepDuration),
+    sleep7: cut(derived.sleep7),
   };
 
   const u = data.units;
@@ -235,28 +413,29 @@ export default function Dashboard({ data }: { data: DashboardData }) {
   // Per-strip readout: hovered date's values, or the default summary when
   // the cursor is away (AC-D9, AC-D10).
   const readout = (hovered: string, summary: string) => (hoverDay === null ? summary : hovered);
-  const orNoReading = (day: string, value: number | null, render: (v: number) => string) =>
-    value === null ? `${day} · no reading` : `${day} · ${render(value)}`;
+  const num = (value: number | null, digits = 1) => (value === null ? "—" : fmt(value, digits));
+  // Hover line for a dots+trend strip: raw (or "no reading") then trends
+  // (e.g. "Jul 12 · 14.2 · 7d 12.8", AC-N5/AC-D9).
+  const hoverLine = (raw: string | null, ...trends: string[]) =>
+    [`${hoverDay}`, raw ?? "no reading", ...trends].join(" · ");
 
-  const bodyFatDomain = fitDomain([s.raw, s.avg7, s.avg30]);
-  const recoveryDomain = { min: 0, max: 100 };
   const scrub = setHoverIndex;
 
-  const periodAvg = (series: Series) => {
-    const present = series.filter((v): v is number => v !== null);
-    return present.length === 0
-      ? null
-      : present.reduce((sum, v) => sum + v, 0) / present.length;
-  };
-  const strainAvg = periodAvg(s.strain);
+  const latestWeight = lastPresent(s.weight);
+  const latestStrain7 = lastPresent(s.strain7);
   const latestRecovery = lastPresent(s.recovery);
   const latestLbm = lastPresent(s.lbm);
+  const latestHrv = lastPresent(s.hrv);
+  const latestRhr = lastPresent(s.rhr);
+  const latestSleep = lastPresent(s.sleep);
+
+  const common = { hoverIndex, axisLength: axis.length, onScrub: scrub };
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 pb-10 font-sans">
       <header className="flex items-center justify-between py-4">
-        {/* v1 header: Status only — the "+ Log meal" / "+ Log workout" CTAs
-            ship with their features, not before (AC-D14). */}
+        {/* v1.1 header: still Status only — the "+ Log meal" / "+ Log
+            workout" CTAs ship with their features, not before (AC-D14). */}
         <span className="text-lg font-semibold tracking-tight">JerkAI</span>
         <Link
           href="/status"
@@ -321,122 +500,126 @@ export default function Dashboard({ data }: { data: DashboardData }) {
             className="overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800"
             onPointerLeave={() => setHoverIndex(null)}
           >
-            {/* Body fat: raw dots + 7d + 30d lines, tallest strip (AC-D2). */}
-            <Strip
+            {/* Body fat: raw dots + 7d + 30d lines, tallest strip — v1
+                treatment unchanged (AC-N3, AC-D1/D2). */}
+            <MetricStrip
+              id="bodyFat"
               label="Body fat"
               heightClass="h-44"
-              hoverIndex={hoverIndex}
-              axisLength={axis.length}
+              raw={s.raw}
+              avg7={s.avg7}
+              avg30={s.avg30}
+              legend
               readout={readout(
-                `${hoverDay} · ${
-                  at(s.raw) === null ? "no reading" : `raw ${withUnit(at(s.raw)!, u.bodyFatPct ?? "%")}`
-                } · 7d ${at(s.avg7) === null ? "—" : withUnit(at(s.avg7)!, u.bodyFatPct ?? "%")} · 30d ${
-                  at(s.avg30) === null ? "—" : withUnit(at(s.avg30)!, u.bodyFatPct ?? "%")
-                }`,
+                hoverLine(
+                  at(s.raw) === null ? null : `raw ${withUnit(at(s.raw)!, u.bodyFatPct ?? "%")}`,
+                  `7d ${at(s.avg7) === null ? "—" : withUnit(at(s.avg7)!, u.bodyFatPct ?? "%")}`,
+                  `30d ${at(s.avg30) === null ? "—" : withUnit(at(s.avg30)!, u.bodyFatPct ?? "%")}`,
+                ),
                 latestRaw ? `raw ${withUnit(latestRaw.value, u.bodyFatPct ?? "%")}` : "no readings",
               )}
-              onScrub={scrub}
-            >
-              <PolyLine series={s.avg30} domain={bodyFatDomain} className="text-violet-500" />
-              <PolyLine series={s.avg7} domain={bodyFatDomain} className="text-sky-500" />
-              {s.raw.map((value, index) =>
-                value === null ? null : (
-                  <span
-                    key={index}
-                    className="absolute h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-zinc-400 dark:bg-zinc-500"
-                    style={{
-                      left: `${xPct(index, axis.length)}%`,
-                      top: `${yPct(value, bodyFatDomain)}%`,
-                    }}
-                  />
-                ),
-              )}
-              <div className="pointer-events-none absolute bottom-1 left-2 z-10 flex gap-3 text-[10px] text-zinc-500">
-                <span>
-                  <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-zinc-400 dark:bg-zinc-500" />
-                  raw
-                </span>
-                <span>
-                  <span className="mr-1 inline-block h-0.5 w-3 -translate-y-0.5 bg-sky-500" />
-                  7-day
-                </span>
-                <span>
-                  <span className="mr-1 inline-block h-0.5 w-3 -translate-y-0.5 bg-violet-500" />
-                  30-day
-                </span>
-              </div>
-            </Strip>
+              {...common}
+            />
 
-            {/* Day Strain: fixed 0–21 domain, Whoop cycle strain (AC-D11). */}
-            <Strip
+            {/* Weight: new in v1.1 (AC-N4, DL-2026-07-18-b) — directly below
+                body fat, display lb (NFR-16). */}
+            <MetricStrip
+              id="weight"
+              label="Weight"
+              tag="Fitdays"
+              heightClass="h-28"
+              raw={s.weight}
+              avg7={s.weight7}
+              avg30={s.weight30}
+              readout={readout(
+                hoverLine(
+                  at(s.weight) === null ? null : `raw ${withUnit(at(s.weight)!, "lb")}`,
+                  `7d ${num(at(s.weight7))}`,
+                  `30d ${num(at(s.weight30))}`,
+                ),
+                latestWeight ? `raw ${withUnit(latestWeight.value, "lb")}` : "no data",
+              )}
+              {...common}
+            />
+
+            {/* Day Strain: fixed 0–21 domain (AC-D11 source clause), faint
+                daily dots + dominant 7-day line (AC-N5). */}
+            <MetricStrip
+              id="strain"
               label="Day strain"
               tag="Driver · Whoop"
               heightClass="h-24"
-              hoverIndex={hoverIndex}
-              axisLength={axis.length}
+              raw={s.strain}
+              avg7={s.strain7}
+              domain={STRAIN_DOMAIN}
+              lineClass="text-amber-500"
               readout={readout(
-                orNoReading(hoverDay ?? "", at(s.strain), (v) => `${fmt(v)} strain`),
-                strainAvg === null ? "no data" : `avg ${fmt(strainAvg)} strain`,
+                hoverLine(at(s.strain) === null ? null : fmt(at(s.strain)!), `7d ${num(at(s.strain7))}`),
+                latestStrain7 ? `7d ${fmt(latestStrain7.value)} strain` : "no data",
               )}
-              onScrub={scrub}
-            >
-              {s.strain.map((value, index) =>
-                value === null ? null : (
-                  <span
-                    key={index}
-                    className="absolute bottom-0 w-[3px] -translate-x-1/2 rounded-t-sm bg-amber-500/80"
-                    style={{
-                      left: `${xPct(index, axis.length)}%`,
-                      height: `${(100 * (value - STRAIN_DOMAIN.min)) / (STRAIN_DOMAIN.max - STRAIN_DOMAIN.min)}%`,
-                    }}
-                  />
-                ),
-              )}
-            </Strip>
+              {...common}
+            />
 
-            {/* Recovery Score: zone bands on Whoop's fixed 0–100 scale. */}
-            <Strip
-              label="Recovery score"
-              tag="Guardrail · Whoop"
-              heightClass="h-24"
-              hoverIndex={hoverIndex}
-              axisLength={axis.length}
-              readout={readout(
-                orNoReading(hoverDay ?? "", at(s.recovery), (v) =>
-                  withUnit(v, u.recoveryScore ?? "%", 0),
-                ),
-                latestRecovery
-                  ? `${withUnit(latestRecovery.value, u.recoveryScore ?? "%", 0)} · ${trendDescriptor(s.recovery)}`
-                  : "no data",
-              )}
-              onScrub={scrub}
-            >
-              <div className="absolute inset-x-0 top-0 h-1/3 bg-emerald-500/10" />
-              <div className="absolute inset-x-0 top-1/3 h-1/3 bg-amber-500/10" />
-              <div className="absolute inset-x-0 top-2/3 h-1/3 bg-red-500/10" />
-              <PolyLine series={s.recovery} domain={recoveryDomain} className="text-emerald-600" />
-            </Strip>
-
-            {/* Lean body mass: Fitdays guardrail (AC-D12). */}
-            <Strip
+            {/* Lean body mass: guardrail, display lb, fitted (non-zero-based)
+                domain so genuine drift stays visible (AC-N7, NFR-16). */}
+            <MetricStrip
+              id="leanMass"
               label="Lean body mass"
               tag="Guardrail · Fitdays"
               heightClass="h-24"
-              hoverIndex={hoverIndex}
-              axisLength={axis.length}
+              raw={s.lbm}
+              avg7={s.lbm7}
+              avg30={s.lbm30}
               readout={readout(
-                orNoReading(hoverDay ?? "", at(s.lbm), (v) => withUnit(v, u.leanBodyMass)),
-                latestLbm
-                  ? `${withUnit(latestLbm.value, u.leanBodyMass)} · ${trendDescriptor(s.lbm)}`
-                  : "no data",
+                hoverLine(
+                  at(s.lbm) === null ? null : `raw ${withUnit(at(s.lbm)!, "lb")}`,
+                  `7d ${num(at(s.lbm7))}`,
+                  `30d ${num(at(s.lbm30))}`,
+                ),
+                latestLbm ? withUnit(latestLbm.value, "lb") : "no data",
               )}
-              onScrub={scrub}
+              {...common}
+            />
+
+            {/* Guardrail readout row (AC-N8–N10): summary statistics only —
+                never a chart, no hover response, no causal language. Stats
+                come precomputed from the derived block (NFR-17). */}
+            <div
+              data-readout-row
+              className="flex flex-wrap items-baseline gap-x-6 gap-y-1 border-t border-zinc-200 px-2 py-2 text-[11px] tabular-nums dark:border-zinc-800"
             >
-              <PolyLine series={s.lbm} domain={fitDomain([s.lbm])} className="text-zinc-500" />
-            </Strip>
+              <span
+                className={
+                  READOUT_TONE_CLASSES[
+                    derived.leanMass === null
+                      ? "neutral"
+                      : derived.leanMass.state === "down"
+                        ? "warning"
+                        : derived.leanMass.state === "up"
+                          ? "good"
+                          : "neutral"
+                  ]
+                }
+              >
+                {derived.leanMass === null
+                  ? "Lean mass — no data"
+                  : `Lean mass ${derived.leanMass.spanDays}d ${signedLb(derived.leanMass.deltaLb)} · ${
+                      derived.leanMass.state === "down" ? "down" : derived.leanMass.state === "up" ? "up" : "holding"
+                    }`}
+              </span>
+              <span className={READOUT_TONE_CLASSES.neutral}>
+                {derived.recovery === null
+                  ? "Recovery — no data"
+                  : `Recovery 7d ${fmt(derived.recovery.avgPct, 0)}% · ${derived.recovery.redDays} red ${
+                      derived.recovery.redDays === 1 ? "day" : "days"
+                    }`}
+              </span>
+            </div>
 
             {/* Collapsible Whoop detail — expanded strips join the shared
-                crosshair (AC-D8). */}
+                crosshair (AC-D8, AC-N11) and follow the same rendering rule
+                (AC-N12). Recovery Score lives here now, not in the main
+                stack (AC-N6). */}
             <div className="border-t border-zinc-200 dark:border-zinc-800">
               <button
                 type="button"
@@ -450,51 +633,77 @@ export default function Dashboard({ data }: { data: DashboardData }) {
             </div>
             {whoopOpen ? (
               <>
-                <Strip
+                <MetricStrip
+                  id="hrv"
                   label="HRV (rMSSD)"
                   heightClass="h-20"
-                  hoverIndex={hoverIndex}
-                  axisLength={axis.length}
+                  raw={s.hrv}
+                  avg7={s.hrv7}
+                  lineClass="text-zinc-400"
                   readout={readout(
-                    orNoReading(hoverDay ?? "", at(s.hrv), (v) => withUnit(v, u.hrv, 0)),
-                    lastPresent(s.hrv) ? withUnit(lastPresent(s.hrv)!.value, u.hrv, 0) : "no data",
+                    hoverLine(
+                      at(s.hrv) === null ? null : withUnit(at(s.hrv)!, u.hrv, 0),
+                      `7d ${num(at(s.hrv7), 0)}`,
+                    ),
+                    latestHrv ? withUnit(latestHrv.value, u.hrv, 0) : "no data",
                   )}
-                  onScrub={scrub}
-                >
-                  <PolyLine series={s.hrv} domain={fitDomain([s.hrv])} className="text-zinc-400" />
-                </Strip>
-                <Strip
+                  {...common}
+                />
+                <MetricStrip
+                  id="rhr"
                   label="Resting heart rate"
                   heightClass="h-20"
-                  hoverIndex={hoverIndex}
-                  axisLength={axis.length}
+                  raw={s.rhr}
+                  avg7={s.rhr7}
+                  lineClass="text-zinc-400"
                   readout={readout(
-                    orNoReading(hoverDay ?? "", at(s.rhr), (v) => withUnit(v, u.rhr, 0)),
-                    lastPresent(s.rhr) ? withUnit(lastPresent(s.rhr)!.value, u.rhr, 0) : "no data",
+                    hoverLine(
+                      at(s.rhr) === null ? null : withUnit(at(s.rhr)!, u.rhr, 0),
+                      `7d ${num(at(s.rhr7), 0)}`,
+                    ),
+                    latestRhr ? withUnit(latestRhr.value, u.rhr, 0) : "no data",
                   )}
-                  onScrub={scrub}
-                >
-                  <PolyLine series={s.rhr} domain={fitDomain([s.rhr])} className="text-zinc-400" />
-                </Strip>
-                <Strip
+                  {...common}
+                />
+                <MetricStrip
+                  id="sleep"
                   label="Sleep duration"
                   heightClass="h-20"
-                  hoverIndex={hoverIndex}
-                  axisLength={axis.length}
+                  raw={s.sleep}
+                  avg7={s.sleep7}
+                  lineClass="text-zinc-400"
                   readout={readout(
-                    orNoReading(hoverDay ?? "", at(s.sleep), (v) => withUnit(v, u.sleepDuration)),
-                    lastPresent(s.sleep)
-                      ? withUnit(lastPresent(s.sleep)!.value, u.sleepDuration)
+                    hoverLine(
+                      at(s.sleep) === null ? null : withUnit(at(s.sleep)!, u.sleepDuration),
+                      `7d ${num(at(s.sleep7))}`,
+                    ),
+                    latestSleep ? withUnit(latestSleep.value, u.sleepDuration) : "no data",
+                  )}
+                  {...common}
+                />
+                <MetricStrip
+                  id="recovery"
+                  label="Recovery score"
+                  tag="Guardrail · Whoop"
+                  heightClass="h-20"
+                  raw={s.recovery}
+                  avg7={s.recovery7}
+                  domain={{ min: 0, max: 100 }}
+                  lineClass="text-emerald-600"
+                  zones
+                  readout={readout(
+                    hoverLine(
+                      at(s.recovery) === null
+                        ? null
+                        : withUnit(at(s.recovery)!, u.recoveryScore ?? "%", 0),
+                      `7d ${num(at(s.recovery7), 0)}`,
+                    ),
+                    latestRecovery
+                      ? withUnit(latestRecovery.value, u.recoveryScore ?? "%", 0)
                       : "no data",
                   )}
-                  onScrub={scrub}
-                >
-                  <PolyLine
-                    series={s.sleep}
-                    domain={fitDomain([s.sleep])}
-                    className="text-zinc-400"
-                  />
-                </Strip>
+                  {...common}
+                />
               </>
             ) : null}
           </section>
