@@ -75,6 +75,27 @@ describe("fetchDashboardData — tall-shape join on the shared date key", () => 
     expect(data.series.hrv).toEqual([null, null, 68]);
   });
 
+  it("AC-N4: Fitdays weight rows land on the shared axis with their stored unit", async () => {
+    await bodyFat("2026-07-15", 18.3);
+    await upsertReading({
+      source: "fitdays",
+      metric: "weight",
+      readingDate: "2026-07-14",
+      value: 180.4,
+      unit: "lb",
+      aggregation: "latest",
+      rawPayload: { date: "2026-07-14 07:30:00 -0500", qty: 180.4 },
+    });
+
+    const data = await fetchDashboardData(2);
+
+    expect(data.axis).toEqual(["2026-07-14", "2026-07-15"]);
+    expect(data.series.weight).toEqual([180.4, null]);
+    // Unit read from the stored row, never assumed (NFR-16 converts at
+    // render time; the read path reports what was stored).
+    expect(data.units.weight).toBe("lb");
+  });
+
   it("NFR-2: only days inside the requested window are returned", async () => {
     await bodyFat("2026-06-01", 19.5);
     await bodyFat("2026-07-15", 18.3);

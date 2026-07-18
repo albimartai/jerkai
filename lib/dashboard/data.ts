@@ -14,6 +14,10 @@ import { DAY_STRAIN_METRIC } from "@/lib/dashboard/strain";
 // to the Whoop cycle metric, never the workout log (NFR-4).
 export const DASHBOARD_METRICS = {
   bodyFatPct: { source: "fitdays", metric: "body_fat_pct" },
+  // v1.1: weight promoted to a main-stack strip (AC-N4, DL-2026-07-18-b) —
+  // already ingested via the Fitdays pipe, so this is a read-path add only
+  // (NFR-15).
+  weight: { source: "fitdays", metric: "weight" },
   leanBodyMass: { source: "fitdays", metric: "lean_body_mass" },
   dayStrain: DAY_STRAIN_METRIC,
   recoveryScore: { source: "whoop", metric: "recovery_score" },
