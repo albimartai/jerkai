@@ -155,6 +155,34 @@ describe("strip treatment (AC-N1, AC-N5, NFR-16)", () => {
   });
 });
 
+describe("expanded Whoop detail (AC-N12, AC-N6)", () => {
+  const expanded = () =>
+    renderToStaticMarkup(<Dashboard data={fixture(40)} initialWhoopOpen />);
+
+  it("AC-N12: HRV, RHR, sleep, and Recovery Score strips all render dots plus a 7-day line", () => {
+    const markup = expanded();
+    for (const id of ["hrv", "rhr", "sleep", "recovery"]) {
+      const block = chartBlock(markup, id);
+      expect(block).toContain('data-series="avg7"');
+      expect(block).toContain('data-raw-dot="0"');
+    }
+  });
+
+  it("AC-N6/AC-N13: expanding the detail adds exactly the four Whoop strips", () => {
+    const charts = [...expanded().matchAll(/data-chart="([^"]+)"/g)].map((m) => m[1]);
+    expect(charts).toEqual([
+      "bodyFat",
+      "weight",
+      "strain",
+      "leanMass",
+      "hrv",
+      "rhr",
+      "sleep",
+      "recovery",
+    ]);
+  });
+});
+
 describe("outlier absorption (AC-N14)", () => {
   it("AC-N14: a single-day weight outlier stays plotted as a raw dot while the trend lines absorb it", () => {
     // 30 days exactly, so the default 30-day window cut is the identity and

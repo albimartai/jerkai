@@ -319,12 +319,25 @@ const READOUT_TONE_CLASSES = {
   neutral: "text-zinc-600 dark:text-zinc-300",
 } as const;
 
-const signedLb = (delta: number) => `${delta < 0 ? "−" : "+"}${fmt(Math.abs(delta))} lb`;
+// Always one decimal so a small change reads "±0.0 lb", never "−0 lb".
+const signedLb = (delta: number) => {
+  const magnitude = Math.abs(delta).toFixed(1);
+  const sign = magnitude === "0.0" ? "±" : delta < 0 ? "−" : "+";
+  return `${sign}${magnitude} lb`;
+};
 
-export default function Dashboard({ data }: { data: DashboardData }) {
+export default function Dashboard({
+  data,
+  initialWhoopOpen = false,
+}: {
+  data: DashboardData;
+  // Collapsed by default (AC-N13); overridable so fixture render tests can
+  // assert the expanded Whoop-detail treatment (AC-N12) without a browser.
+  initialWhoopOpen?: boolean;
+}) {
   const [windowDays, setWindowDays] = useState<WindowDays>(30);
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
-  const [whoopOpen, setWhoopOpen] = useState(false);
+  const [whoopOpen, setWhoopOpen] = useState(initialWhoopOpen);
 
   // Everything derived is computed ONCE per data load (NFR-17), over the
   // FULL fetched history, then cut to the window — so the 7d/30d values at
