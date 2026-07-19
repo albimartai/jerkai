@@ -23,6 +23,6 @@ Baseline DoD — every item, from [docs/definition-of-ready-and-done.md](https:/
 - [ ] Secret hygiene intact — no secrets committed; gitleaks + secret scanning passing
 - [ ] Merging via PR with this checklist completed
 
-Feature-specific DoD: see the slice's build PRD in `docs/prd/` (for the current slice: [v1-dashboard.md](https://github.com/albimartai/jerkai/blob/main/docs/prd/v1-dashboard.md) §3).
+Feature-specific DoD: see the slice's build PRD in `docs/prd/` (for the current slice: [archive/v1-dashboard.md](https://github.com/albimartai/jerkai/blob/main/docs/prd/archive/v1-dashboard.md) §3).
 
 - [ ] Feature-specific DoD from the slice's PRD completed (or n/a for non-feature PRs)
