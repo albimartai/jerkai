@@ -10,13 +10,28 @@ North star: **body fat % trend** (7-day and 30-day rolling average) as the decis
 
 - **Energy balance** — *driver* — calories/macros vs target, from manual meal logging.
 - **Training** — *driver* — **Whoop Day Strain (Cycle Strain, 0–21)**, from the Whoop API. NOT workout-log tonnage (tonnage is permanently not a dashboard metric).
-- **Recovery Score** — *guardrail* — Whoop's own Recovery Score, via the direct Whoop API.
-- **Lean body mass** — *guardrail* — from Fitdays via Apple Health.
+- **Recovery Score** — *guardrail* — Whoop's own Recovery Score, via the direct Whoop API. Surfaced as a guardrail readout plus a strip inside the collapsible Whoop detail, not a main-stack strip (decision DL-2026-07-18-a).
+- **Lean body mass** — *guardrail* — from Fitdays via Apple Health. Surfaced as a main-stack strip plus a 30-day-change readout.
 
-## v1 dashboard (direction 1c) — dashboard only
-Stacked strips on one shared date axis; hover scrubs a crosshair across all strips to the same day. **v1 strips:** Body fat % (raw dots + 7d/30d lines, tallest) → Day Strain (driver · Whoop, 0–21) → Recovery Score (guardrail · Whoop) → Lean body mass (guardrail · Fitdays) → collapsible Whoop detail (HRV, RHR, sleep). A passive stall badge — no cause diagnosis in v1.
-- **No Calories-vs-target strip in v1** — it arrives with Log Meal (its own later slice) and is added to the dashboard then.
-- **No "+ Log meal" / "+ Log workout" header CTAs in v1** — hidden until their features ship (this is the resolution of the inert `href="#"` dead-link bug for v1). Only "Status" is present.
+## v1.1 dashboard (direction 1c) — dashboard only
+Stacked strips on one shared date axis; hover scrubs a crosshair across all strips to the
+same day. One rendering rule everywhere: raw daily values are low-emphasis dots and the
+7-day rolling line is the dominant mark — no strip renders a raw daily line as its primary
+mark. **v1.1 main stack (top → bottom):** Body fat % (raw dots + 7d/30d lines, tallest) →
+Weight (Fitdays) → Day Strain trend (driver · Whoop, 7d line over faint 0–21 dailies) →
+Lean body mass (guardrail · Fitdays) → guardrail readout row (lean-mass 30-day change +
+Recovery Score 7-day summary) → collapsible Whoop detail (HRV, RHR, sleep, Recovery Score).
+A passive stall badge — no cause diagnosis.
+- **Recovery Score is a readout, not a main-stack strip.** It surfaces as a guardrail
+  readout (7-day average + red-zone-day count) and as a full strip inside the collapsible
+  Whoop detail. Demoted from the v1 main stack (decision DL-2026-07-18-a).
+- **Weight is a main-stack strip** (Fitdays, already ingested), added below body fat
+  (decision DL-2026-07-18-b). It is a strip in its own right, not a north-star/driver/
+  guardrail metric.
+- **No Calories-vs-target strip** — it arrives with Log Meal (its own later slice) and is
+  added to the dashboard then.
+- **No "+ Log meal" / "+ Log workout" header CTAs** — hidden until their features ship.
+  Only "Status" is present.
 
 ## Later, separate slices (not v1 — do not build/test here)
 - **Log Meal:** structured manual form (meal type, date, optional description, kcal/P/C/F) — JerkAI stores what you enter; it does not estimate macros. Adds the Calories-vs-target strip to the dashboard. Edit/delete and favorites/recents quick-add are post-v1 fast-follows.
