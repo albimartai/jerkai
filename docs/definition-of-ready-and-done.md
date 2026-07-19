@@ -4,7 +4,22 @@
 
 Canonical source is the vault file. This repo carries a build-time snapshot at `docs/definition-of-ready-and-done.md` (authored/refreshed by a Claude Code session), the same source-in-vault / snapshot-in-repo pattern used for build PRDs. When this standard changes, update the vault source and re-snapshot the repo copy — do not edit the two independently.
 
-**Last updated:** 2026-07-17
+**Last updated:** 2026-07-18
+
+## Session start (every Claude Code build/docs prompt)
+
+Every build or docs session prompt opens with an explicit branch-from-fresh-main step,
+before any other work:
+
+    git checkout main
+    git fetch origin --prune
+    git pull --ff-only
+    git checkout -b <type>/<short-name>   # e.g. feat/log-meal
+
+Do not branch from any existing feature branch, and do not reuse a leftover local branch.
+Confirm the new branch's base is current — `git log --oneline -1 main` should match
+`origin/main` — before starting work. (Decision DL-2026-07-18-c in the project decision
+log, kept in the Career vault, not this repo.)
 
 ## Definition of Ready (entry gate)
 
