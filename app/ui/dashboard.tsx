@@ -1,15 +1,15 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo, useState } from "react";
 
+import { NavHeader } from "@/app/ui/nav-header";
 import { DASHBOARD_CONFIG } from "@/lib/dashboard/config";
 import type { DashboardData } from "@/lib/dashboard/data";
+import { isoWeekEnd } from "@/lib/dashboard/iso-week";
 import { leanMassChange, recoveryReadout } from "@/lib/dashboard/readouts";
 import { rollingAverage } from "@/lib/dashboard/rolling";
 import { STRAIN_DOMAIN } from "@/lib/dashboard/strain";
-import { stallBadge } from "@/lib/dashboard/stall-badge";
-import { toPounds } from "@/lib/dashboard/units";
+import { buildWeeklyView } from "@/lib/dashboard/weekly-view";
 
 // Direction 1c, v1.1 revision (signal over noise): every metric is a
 // horizontal strip stacked on one shared date axis; hovering (or
@@ -329,11 +329,16 @@ const signedLb = (delta: number) => {
 export default function Dashboard({
   data,
   initialWhoopOpen = false,
+  focusWeekStart,
 }: {
   data: DashboardData;
   // Collapsed by default (AC-N13); overridable so fixture render tests can
   // assert the expanded Whoop-detail treatment (AC-N12) without a browser.
   initialWhoopOpen?: boolean;
+  // Drill-down from a Weekly Ledger row (AC-W6): a Monday ISO week key.
+  // When set, the visible window is positioned to contain that week instead
+  // of trailing at the latest day.
+  focusWeekStart?: string;
 }) {
   const [windowDays, setWindowDays] = useState<WindowDays>(30);
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
@@ -347,37 +352,42 @@ export default function Dashboard({
   // toggle. Weight and lean mass are converted to display lb here, at
   // render time — stored rows are untouched (NFR-16).
   const derived = useMemo(() => {
-    const lb = (series: Series, unit: string | null) =>
-      series.map((v) => (v === null ? null : toPounds(v, unit)));
     const bf = data.series.bodyFatPct;
-    const bf30 = rollingAverage(bf, 30);
-    const weightLb = lb(data.series.weight, data.units.weight);
-    const lbmLb = lb(data.series.leanBodyMass, data.units.leanBodyMass);
-    const lbm7 = rollingAverage(lbmLb, 7);
+    // Weekly Ledger view (AC-W10): the hero badge below is computed from
+    // completed ledger weeks, not recomputed here — this reuses the exact
+    // same lb-converted/smoothed series and rows the Weekly Ledger page
+    // renders, so the two can never disagree (AC-W12, NFR-21).
+    const weekly = buildWeeklyView(data);
     return {
       bf7: rollingAverage(bf, 7),
-      bf30,
-      badge: stallBadge(bf30),
-      weightLb,
-      weight7: rollingAverage(weightLb, 7),
-      weight30: rollingAverage(weightLb, 30),
+      bf30: weekly.bodyFat30,
+      badge: weekly.badge,
+      weightLb: weekly.weightLb,
+      weight7: weekly.weight7,
+      weight30: rollingAverage(weekly.weightLb, 30),
       strain7: rollingAverage(data.series.dayStrain, 7),
-      lbmLb,
-      lbm7,
-      lbm30: rollingAverage(lbmLb, 30),
+      lbmLb: weekly.leanMassLb,
+      lbm7: weekly.leanMass7,
+      lbm30: rollingAverage(weekly.leanMassLb, 30),
       recovery7: rollingAverage(data.series.recoveryScore, 7),
       hrv7: rollingAverage(data.series.hrv, 7),
       rhr7: rollingAverage(data.series.rhr, 7),
       sleep7: rollingAverage(data.series.sleepDuration, 7),
       // Guardrail readout stats (AC-N8, AC-N9), thresholds from config
       // (NFR-16). Lean mass reads the smoothed lb series.
-      leanMass: leanMassChange(lbm7, DASHBOARD_CONFIG.leanMass),
+      leanMass: leanMassChange(weekly.leanMass7, DASHBOARD_CONFIG.leanMass),
       recovery: recoveryReadout(data.series.recoveryScore, DASHBOARD_CONFIG.recovery),
     };
   }, [data]);
 
-  const cutLength = Math.min(windowDays, data.axis.length);
-  const cut = <T,>(full: readonly T[]): T[] => full.slice(full.length - cutLength);
+  // Default: trail at the latest day. With a drill-down focus week (AC-W6),
+  // anchor a few days past that week's end instead, so the window is
+  // positioned to contain it rather than always hugging the newest data.
+  const focusWeekEnd = focusWeekStart ? isoWeekEnd(focusWeekStart) : null;
+  const focusIndex = focusWeekEnd ? data.axis.indexOf(focusWeekEnd) : -1;
+  const cutEnd = focusIndex === -1 ? data.axis.length - 1 : Math.min(data.axis.length - 1, focusIndex + 3);
+  const cutStart = Math.max(0, cutEnd - windowDays + 1);
+  const cut = <T,>(full: readonly T[]): T[] => full.slice(cutStart, cutEnd + 1);
 
   const axis = cut(data.axis);
   const s = {
@@ -433,17 +443,7 @@ export default function Dashboard({
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 pb-10 font-sans">
-      <header className="flex items-center justify-between py-4">
-        {/* v1.1 header: still Status only — the "+ Log meal" / "+ Log
-            workout" CTAs ship with their features, not before (AC-D14). */}
-        <span className="text-lg font-semibold tracking-tight">JerkAI</span>
-        <Link
-          href="/status"
-          className="rounded-md border border-zinc-200 px-3 py-1 text-sm text-zinc-600 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900"
-        >
-          Status
-        </Link>
-      </header>
+      <NavHeader active="daily" />
 
       {data.axis.length === 0 ? (
         <p className="py-24 text-center text-2xl text-zinc-500">No readings yet.</p>

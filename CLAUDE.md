@@ -1,4 +1,4 @@
 @AGENTS.md
 @docs/context.md
-@docs/prd/v1.1-dashboard.md
+@docs/prd/weekly-ledger.md
 @docs/definition-of-ready-and-done.md
