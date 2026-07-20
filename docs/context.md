@@ -13,7 +13,22 @@ North star: **body fat % trend** (7-day and 30-day rolling average) as the decis
 - **Recovery Score** — *guardrail* — Whoop's own Recovery Score, via the direct Whoop API. Surfaced as a guardrail readout plus a strip inside the collapsible Whoop detail, not a main-stack strip (decision DL-2026-07-18-a).
 - **Lean body mass** — *guardrail* — from Fitdays via Apple Health. Surfaced as a main-stack strip plus a 30-day-change readout.
 
-## v1.1 dashboard (direction 1c) — dashboard only
+## Surfaces & routes (Weekly Ledger, DL-2026-07-19-a)
+Two resolutions, one nav: **`/weekly`** (the Weekly Ledger) is the default landing page —
+one row per ISO week (Mon–Sun), five columns of deltas/states, newest week first, capped at
+13 completed weeks plus the current in-progress week. It answers "how did my weeks go?" in
+one scan. **`/daily`** is the strip stack (below) — the drill-down surface opened from a
+ledger row, or directly for day-level co-movement investigation. Every page header carries
+Weekly/Daily nav plus Status (unchanged, AC-D15).
+
+The hero stall badge is computed from completed Weekly Ledger rows, not daily streaks
+(DL-2026-07-19-b): a body-fat trend delta at or below −ε reads "trending down N wks", at or
+above +ε reads "trend rising", otherwise "trend flat" (ε default 0.05 pp/week, config). The
+daily-streak logic (the badge's pre-Weekly-Ledger computation) survives only as the
+cold-start fallback while fewer than 2 completed weeks exist. The badge is still passive —
+it never asserts a cause, on either surface.
+
+## v1.1 dashboard (direction 1c) — the `/daily` drill-down surface
 Stacked strips on one shared date axis; hover scrubs a crosshair across all strips to the
 same day. One rendering rule everywhere: raw daily values are low-emphasis dots and the
 7-day rolling line is the dominant mark — no strip renders a raw daily line as its primary
@@ -21,7 +36,7 @@ mark. **v1.1 main stack (top → bottom):** Body fat % (raw dots + 7d/30d lines,
 Weight (Fitdays) → Day Strain trend (driver · Whoop, 7d line over faint 0–21 dailies) →
 Lean body mass (guardrail · Fitdays) → guardrail readout row (lean-mass 30-day change +
 Recovery Score 7-day summary) → collapsible Whoop detail (HRV, RHR, sleep, Recovery Score).
-A passive stall badge — no cause diagnosis.
+The hero stall badge shown here is the same one described above.
 - **Recovery Score is a readout, not a main-stack strip.** It surfaces as a guardrail
   readout (7-day average + red-zone-day count) and as a full strip inside the collapsible
   Whoop detail. Demoted from the v1 main stack (decision DL-2026-07-18-a).

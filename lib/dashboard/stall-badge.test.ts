@@ -2,8 +2,15 @@ import { describe, expect, it } from "vitest";
 
 import { stallBadge } from "@/lib/dashboard/stall-badge";
 
-// Executable spec for the hero stall badge (AC-D4–AC-D7). Input is the
-// 30-day trend line on the shared day axis (nulls = gap days, skipped).
+// Executable spec for stallBadge() itself: the daily-streak trend logic
+// (originally AC-D4–AC-D7). As of the Weekly Ledger slice, this logic is no
+// longer the badge's primary computation — weeklyStallBadge() (see
+// weekly-badge.ts) is, deriving from completed ledger weeks per AC-W10. This
+// function now survives solely as the AC-W11 cold-start fallback (<2
+// completed weeks), so these cases are re-scoped to cover that fallback path
+// rather than dropped (NFR-20); weekly-badge.test.ts asserts the fallback is
+// wired to this exact function, unchanged. Input is the 30-day trend line on
+// the shared day axis (nulls = gap days, skipped).
 
 // A strictly falling trend of `days` points ending at the series tail.
 const falling = (days: number) => Array.from({ length: days }, (_, i) => 20 - i * 0.05);

@@ -7,7 +7,7 @@
 // days with no time component, so treating them as UTC noon-less instants
 // keeps day math free of DST wobble — no local-timezone conversion ever
 // touches the keys themselves.
-function addDays(dateKey: string, days: number): string {
+export function addDays(dateKey: string, days: number): string {
   const date = new Date(`${dateKey}T00:00:00Z`);
   date.setUTCDate(date.getUTCDate() + days);
   return date.toISOString().slice(0, 10);
