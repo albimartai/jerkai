@@ -9,7 +9,9 @@ const RESOLUTION_LINKS = [
   { href: "/daily", label: "Daily" },
 ] as const;
 
-export function NavHeader({ active }: { active: "weekly" | "daily" }) {
+// `active` is undefined on pages outside the Weekly/Daily resolution pair (Log Meal,
+// Settings → Targets) — neither resolution link highlights there.
+export function NavHeader({ active }: { active?: "weekly" | "daily" } = {}) {
   return (
     <header className="flex items-center justify-between py-4">
       <span className="text-lg font-semibold tracking-tight">JerkAI</span>
@@ -31,12 +33,23 @@ export function NavHeader({ active }: { active: "weekly" | "daily" }) {
             </Link>
           );
         })}
-        {/* v1.1 header: still Status only beyond resolution nav — the
-            "+ Log meal" / "+ Log workout" CTAs ship with their features,
-            not before (AC-D14). */}
+        {/* Log Meal ships in this slice (AC-M13) — the CTA returns per AC-D14's own
+            terms. "+ Log workout" stays absent (its slice hasn't shipped). */}
+        <Link
+          href="/settings/targets"
+          className="ml-2 rounded-md px-2 py-1 text-sm text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-900"
+        >
+          Targets
+        </Link>
+        <Link
+          href="/log-meal"
+          className="rounded-md border border-zinc-200 px-3 py-1 text-sm text-zinc-600 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900"
+        >
+          + Log meal
+        </Link>
         <Link
           href="/status"
-          className="ml-2 rounded-md border border-zinc-200 px-3 py-1 text-sm text-zinc-600 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900"
+          className="rounded-md border border-zinc-200 px-3 py-1 text-sm text-zinc-600 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900"
         >
           Status
         </Link>

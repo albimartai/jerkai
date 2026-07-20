@@ -8,7 +8,9 @@ A single-user personal health dashboard that turns a noisy daily body-fat readin
 ## North star & driver tree
 North star: **body fat % trend** (7-day and 30-day rolling average) as the decision signal — but the **raw daily reading is always shown alongside it, never hidden or replaced**. Raw = record of truth; trend = the lens for deciding whether anything changed.
 
-- **Energy balance** — *driver* — calories/macros vs target, from manual meal logging.
+- **Energy balance** — *driver* — calories/macros vs target, from manual meal logging (Log
+  Meal, shipped: `/log-meal` + Settings → Targets, `docs/prd/log-meal.md`). JerkAI stores
+  what's entered; it does not estimate macros — that happens outside the app.
 - **Training** — *driver* — **Whoop Day Strain (Cycle Strain, 0–21)**, from the Whoop API. NOT workout-log tonnage (tonnage is permanently not a dashboard metric).
 - **Recovery Score** — *guardrail* — Whoop's own Recovery Score, via the direct Whoop API. Surfaced as a guardrail readout plus a strip inside the collapsible Whoop detail, not a main-stack strip (decision DL-2026-07-18-a).
 - **Lean body mass** — *guardrail* — from Fitdays via Apple Health. Surfaced as a main-stack strip plus a 30-day-change readout.
@@ -32,25 +34,34 @@ it never asserts a cause, on either surface.
 Stacked strips on one shared date axis; hover scrubs a crosshair across all strips to the
 same day. One rendering rule everywhere: raw daily values are low-emphasis dots and the
 7-day rolling line is the dominant mark — no strip renders a raw daily line as its primary
-mark. **v1.1 main stack (top → bottom):** Body fat % (raw dots + 7d/30d lines, tallest) →
-Weight (Fitdays) → Day Strain trend (driver · Whoop, 7d line over faint 0–21 dailies) →
-Lean body mass (guardrail · Fitdays) → guardrail readout row (lean-mass 30-day change +
-Recovery Score 7-day summary) → collapsible Whoop detail (HRV, RHR, sleep, Recovery Score).
-The hero stall badge shown here is the same one described above.
+mark (the calories strip, below, is the one deliberate exception). **Main stack (top →
+bottom):** Body fat % (raw dots + 7d/30d lines, tallest) → Weight (Fitdays) → Day Strain
+trend (driver · Whoop, 7d line over faint 0–21 dailies) → **Calories vs target (driver ·
+manual, daily bars — Log Meal)** → Lean body mass (guardrail · Fitdays) → guardrail readout
+row (lean-mass 30-day change + Recovery Score 7-day summary) → collapsible Whoop detail
+(HRV, RHR, sleep, Recovery Score). Five charts render with the Whoop detail collapsed. The
+hero stall badge shown here is the same one described above.
 - **Recovery Score is a readout, not a main-stack strip.** It surfaces as a guardrail
   readout (7-day average + red-zone-day count) and as a full strip inside the collapsible
   Whoop detail. Demoted from the v1 main stack (decision DL-2026-07-18-a).
 - **Weight is a main-stack strip** (Fitdays, already ingested), added below body fat
   (decision DL-2026-07-18-b). It is a strip in its own right, not a north-star/driver/
   guardrail metric.
-- **No Calories-vs-target strip** — it arrives with Log Meal (its own later slice) and is
-  added to the dashboard then.
-- **No "+ Log meal" / "+ Log workout" header CTAs** — hidden until their features ship.
-  Only "Status" is present.
+- **Calories-vs-target strip** (Log Meal, `docs/prd/log-meal.md`): daily bars colored
+  over/under that day's effective target, not the dots+trend treatment — logged intake is a
+  discrete daily behavior where the daily value is the decision-relevant mark
+  (DL-pending-2). Each day resolves against whatever target was in force *that day*
+  (`lib/targets.ts#resolveTargetForDate`), so a later target change never recolors history
+  (DL-pending-3). A day with no logged entry is a gap, not a zero.
+- **"+ Log meal" header CTA is live** (`/log-meal`), per AC-D14's own terms — it returns
+  once its feature ships. **"+ Log workout" stays absent** until its slice ships.
 
-## Later, separate slices (not v1 — do not build/test here)
-- **Log Meal:** structured manual form (meal type, date, optional description, kcal/P/C/F) — JerkAI stores what you enter; it does not estimate macros. Adds the Calories-vs-target strip to the dashboard. Edit/delete and favorites/recents quick-add are post-v1 fast-follows.
-- **Log Workout:** free text → LLM parse → editable Movement/Set/Reps/Load table → Draft/Completed. Parse extracts only what the text states and never invents a load. Standalone screen, **not** surfaced on the dashboard in v1. No dashboard dependency.
+## Later, separate slices (not built here)
+- **Log Meal fast-follows:** edit/delete (a wrong entry is uncorrectable until this ships),
+  Favorites/Recents quick-add, and free-text LLM estimation (deferred pending an
+  accuracy-tolerance decision — JerkAI does not currently estimate macros at all). The
+  Weekly Ledger's adherence column (days-in-range per week) is also a separate follow-up.
+- **Log Workout:** free text → LLM parse → editable Movement/Set/Reps/Load table → Draft/Completed. Parse extracts only what the text states and never invents a load. Standalone screen, **not** surfaced on the dashboard. No dashboard dependency.
 
 ## Delivery principle
 Thin vertical slices over wide ones: smallest end-to-end usable slice first, enhancements as separate follow-ups.

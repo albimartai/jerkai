@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import Dashboard from "@/app/ui/dashboard";
 import { fetchDashboardData } from "@/lib/dashboard/data";
+import { fetchCalorieSeries } from "@/lib/meal-entries";
+import { fetchTargets } from "@/lib/targets";
 
 // Always query at request time — this page must reflect the live database,
 // never a build-time snapshot.
@@ -33,5 +35,11 @@ export default async function Daily({
   const data = await fetchDashboardData(MAX_WINDOW_DAYS);
   const { week } = await searchParams;
 
-  return <Dashboard data={data} focusWeekStart={week} />;
+  // Sibling read path (the calories strip's data comes from manual_macro_entries /
+  // daily_targets, not biometric_readings) — same axis as the strip stack, each day
+  // resolved against its own effective target (NFR-30, DL-pending-3).
+  const targets = await fetchTargets();
+  const calorieSeries = await fetchCalorieSeries(data.axis, targets);
+
+  return <Dashboard data={data} calorieSeries={calorieSeries} focusWeekStart={week} />;
 }
