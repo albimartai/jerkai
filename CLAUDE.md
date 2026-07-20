@@ -1,4 +1,4 @@
 @AGENTS.md
 @docs/context.md
-@docs/prd/weekly-ledger.md
+@docs/prd/log-meal.md
 @docs/definition-of-ready-and-done.md

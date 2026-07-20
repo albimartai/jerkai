@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 
 import { NavHeader } from "@/app/ui/nav-header";
+import type { CalorieDay } from "@/lib/dashboard/calorie-strip";
 import { DASHBOARD_CONFIG } from "@/lib/dashboard/config";
 import type { DashboardData } from "@/lib/dashboard/data";
 import { isoWeekEnd } from "@/lib/dashboard/iso-week";
@@ -302,6 +303,84 @@ function MetricStrip({
   );
 }
 
+// Bar colors for the calories strip (DL-pending-2, AC-M6, AC-M11): over/under target,
+// neutral when no target is in force, and a gap (no bar at all) when nothing was logged
+// (AC-M8) — a gap must never read as a zero-height "under" bar.
+const CALORIE_BAR_CLASSES = {
+  over: "bg-amber-500/70",
+  under: "bg-emerald-500/70",
+  neutral: "bg-zinc-400/50 dark:bg-zinc-500/50",
+} as const;
+
+// The calories strip (DL-pending-2): daily bars, not the dots+trend-line treatment every
+// other strip uses — logged intake is a discrete daily behavior where the daily value
+// itself is the decision-relevant mark, not a smoothed trend. Reuses the Strip shell for
+// chrome/crosshair/scrub (NFR-31); the bar rendering is its own, not a MetricStrip variant.
+function CalorieBarStrip({
+  days,
+  hoverIndex,
+  axisLength,
+  readout,
+  onScrub,
+}: {
+  days: CalorieDay[];
+  hoverIndex: number | null;
+  axisLength: number;
+  readout: string;
+  onScrub: (index: number | null) => void;
+}) {
+  const barWidthPct = axisLength > 0 ? 100 / axisLength : 0;
+  return (
+    <Strip
+      label="Calories"
+      tag="DRIVER · MANUAL"
+      heightClass="h-24"
+      hoverIndex={hoverIndex}
+      axisLength={axisLength}
+      readout={readout}
+      onScrub={onScrub}
+    >
+      <div data-chart="calories" className="absolute inset-0">
+        {days.map((day, index) => {
+          // A gap (no entry logged, AC-M8) renders as a bare tick at the axis, never a
+          // colored bar — visually distinct from a genuinely low logged day, which still
+          // gets a colored (if short) bar.
+          if (day.state === "gap") {
+            return (
+              <div
+                key={index}
+                data-bar={index}
+                data-bar-state={day.state}
+                className="absolute bottom-0 bg-zinc-300 dark:bg-zinc-700"
+                style={{ left: `${index * barWidthPct}%`, width: `${barWidthPct}%`, height: "2px" }}
+              />
+            );
+          }
+          return (
+            <div
+              key={index}
+              data-bar={index}
+              data-bar-state={day.state}
+              className={`absolute bottom-0 ${CALORIE_BAR_CLASSES[day.state]}`}
+              style={{
+                left: `${index * barWidthPct}%`,
+                width: `${barWidthPct}%`,
+                // Height scales to the day's own target when one is in force (so a bar
+                // twice its target reads visibly "over"); a flat reference height when
+                // there's no target to scale against (AC-M11, neutral).
+                height:
+                  day.target && day.target > 0
+                    ? `${Math.min(100, ((day.actual ?? 0) / day.target) * 100)}%`
+                    : "50%",
+              }}
+            />
+          );
+        })}
+      </div>
+    </Strip>
+  );
+}
+
 // --- the dashboard --------------------------------------------------------
 
 const WINDOWS = [30, 90] as const;
@@ -328,10 +407,17 @@ const signedLb = (delta: number) => {
 
 export default function Dashboard({
   data,
+  calorieSeries,
   initialWhoopOpen = false,
   focusWeekStart,
 }: {
   data: DashboardData;
+  // The calories strip's data (AC-M6), one entry per data.axis day — already resolved
+  // per-day against its own effective target (NFR-30, DL-pending-3) by
+  // lib/meal-entries.ts#fetchCalorieSeries. Not part of DashboardData: it comes from a
+  // different table (manual_macro_entries/daily_targets, not biometric_readings) via a
+  // sibling read path.
+  calorieSeries: CalorieDay[];
   // Collapsed by default (AC-N13); overridable so fixture render tests can
   // assert the expanded Whoop-detail treatment (AC-N12) without a browser.
   initialWhoopOpen?: boolean;
@@ -399,6 +485,7 @@ export default function Dashboard({
     weight30: cut(derived.weight30),
     strain: cut(data.series.dayStrain),
     strain7: cut(derived.strain7),
+    calories: cut(calorieSeries),
     recovery: cut(data.series.recoveryScore),
     recovery7: cut(derived.recovery7),
     lbm: cut(derived.lbmLb),
@@ -429,10 +516,21 @@ export default function Dashboard({
   const hoverLine = (raw: string | null, ...trends: string[]) =>
     [`${hoverDay}`, raw ?? "no reading", ...trends].join(" · ");
 
+  // e.g. "Jul 12 · 2,140 kcal · target 2,300 · −160" (AC-M6).
+  const calorieLine = (day: CalorieDay | undefined) => {
+    if (!day || day.actual === null) return "no entry";
+    const actual = `${fmt(day.actual, 0)} kcal`;
+    if (day.target === null) return actual;
+    const delta = day.actual - day.target;
+    const sign = delta === 0 ? "±" : delta > 0 ? "+" : "−";
+    return `${actual} · target ${fmt(day.target, 0)} · ${sign}${fmt(Math.abs(delta), 0)}`;
+  };
+
   const scrub = setHoverIndex;
 
   const latestWeight = lastPresent(s.weight);
   const latestStrain7 = lastPresent(s.strain7);
+  const latestCalorieDay = [...s.calories].reverse().find((day) => day.actual !== null);
   const latestRecovery = lastPresent(s.recovery);
   const latestLbm = lastPresent(s.lbm);
   const latestHrv = lastPresent(s.hrv);
@@ -556,6 +654,18 @@ export default function Dashboard({
               readout={readout(
                 hoverLine(at(s.strain) === null ? null : fmt(at(s.strain)!), `7d ${num(at(s.strain7))}`),
                 latestStrain7 ? `7d ${fmt(latestStrain7.value)} strain` : "no data",
+              )}
+              {...common}
+            />
+
+            {/* Calories vs target (AC-M6, Log Meal slice): daily bars, not
+                dots+trend (DL-pending-2) — directly below Day Strain, drivers
+                grouped (OQ-2 default). */}
+            <CalorieBarStrip
+              days={s.calories}
+              readout={readout(
+                `${hoverDay} · ${calorieLine(hoverIndex === null ? undefined : s.calories[hoverIndex])}`,
+                calorieLine(latestCalorieDay),
               )}
               {...common}
             />

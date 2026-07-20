@@ -2,6 +2,8 @@
 // and rendering margins live here — never hardcoded in component code — so
 // they can be tuned without touching the strips or readouts.
 
+import type { MealTypeConfig } from "@/lib/dashboard/meal-type";
+
 export type LeanMassConfig = {
   // Guardrail band: a change within ±bandLb over windowDays reads as
   // "holding"; a drop below −bandLb is the warning state (AC-N8).
@@ -38,6 +40,8 @@ export type DashboardConfig = {
   leanMass: LeanMassConfig;
   recovery: RecoveryConfig;
   ledger: LedgerConfig;
+  // Meal-type chip default by local time of day (AC-M1, OQ-1 default boundaries).
+  mealType: MealTypeConfig;
   // Fitted Y domains (AC-N7): headroom added above/below the observed range,
   // as a fraction of that range, so dots never sit on the strip edge and
   // genuine drift stays visually detectable (never zero-based).
@@ -53,5 +57,6 @@ export const DASHBOARD_CONFIG: DashboardConfig = {
     maxCompletedWeeks: 13,
     epsilonPpPerWeek: 0.05,
   },
+  mealType: { breakfastBeforeHour: 11, lunchBeforeHour: 16, dinnerBeforeHour: 21 },
   yDomainMarginFraction: 0.12,
 };
