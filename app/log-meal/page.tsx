@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
 import { NavHeader } from "@/app/ui/nav-header";
-import { LogMealForm } from "@/app/ui/log-meal-form";
+import { LogMealPanel } from "@/app/ui/log-meal-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +17,7 @@ export default async function LogMeal() {
   return (
     <main className="mx-auto w-full max-w-3xl px-4 pb-10 font-sans">
       <NavHeader />
-      <LogMealForm />
+      <LogMealPanel />
     </main>
   );
 }

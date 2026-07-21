@@ -3,12 +3,20 @@
 import { useActionState, useEffect, useState } from "react";
 import { useFormStatus } from "react-dom";
 
-import { logMealAction, initialLogMealState } from "@/app/log-meal/actions";
+import {
+  logMealAction,
+  initialLogMealState,
+  updateMealEntryAction,
+  initialEditMealState,
+} from "@/app/log-meal/actions";
 import { DASHBOARD_CONFIG } from "@/lib/dashboard/config";
 import { defaultMealType, type MealType } from "@/lib/dashboard/meal-type";
+import type { MealEntryRow } from "@/lib/meal-entries";
 
 // Model 2b (docs/prd/log-meal.md): a structured form, no macro estimation — the user types
-// what they looked up, JerkAI stores it exactly (AC-M2).
+// what they looked up, JerkAI stores it exactly (AC-M2). Extended by Edit & Delete Meal
+// (docs/prd/edit-delete-meal.md, AC-M17) to double as the edit form via the optional
+// editEntry prop, reusing the same fields/validation rather than forking a second form.
 
 const MEAL_TYPES: { value: MealType; label: string }[] = [
   { value: "breakfast", label: "Breakfast" },
@@ -20,7 +28,7 @@ const MEAL_TYPES: { value: MealType; label: string }[] = [
 // Device-local calendar day (NFR-2) — must run on the client only. Vercel's server clock
 // is UTC, so computing "today" or the meal-type default during server render would
 // misclassify evenings against the device's actual local time.
-function todayLocal(): string {
+export function todayLocal(): string {
   const now = new Date();
   const yyyy = now.getFullYear();
   const mm = String(now.getMonth() + 1).padStart(2, "0");
@@ -44,43 +52,67 @@ function SubmitButton({ ready }: { ready: boolean }) {
 const inputClass =
   "w-full rounded-md border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-950";
 
-export function LogMealForm() {
-  const [state, formAction] = useActionState(logMealAction, initialLogMealState);
+export function LogMealForm({
+  editEntry = null,
+  onEditComplete,
+  onMutationSuccess,
+}: {
+  editEntry?: MealEntryRow | null;
+  onEditComplete?: () => void;
+  onMutationSuccess?: () => void;
+} = {}) {
+  const [state, formAction] = useActionState(
+    editEntry ? updateMealEntryAction : logMealAction,
+    editEntry ? initialEditMealState : initialLogMealState,
+  );
 
   // Client-only defaults (AC-M1): null until the mount effect runs, so server render and
-  // first client render agree (no hydration mismatch) before local time is known.
-  const [mealType, setMealType] = useState<MealType | null>(null);
-  const [entryDate, setEntryDate] = useState<string | null>(null);
+  // first client render agree (no hydration mismatch) before local time is known. In edit
+  // mode (AC-M17) editEntry is only ever set by a user click, never on initial render, so
+  // its values are known up front — no mount-effect wait needed there.
+  const [mealType, setMealType] = useState<MealType | null>(editEntry?.mealType ?? null);
+  const [entryDate, setEntryDate] = useState<string | null>(editEntry?.entryDate ?? null);
   const [idempotencyKey, setIdempotencyKey] = useState<string | null>(null);
 
   useEffect(() => {
+    if (editEntry) return;
     // Reading the browser clock/locale (NFR-2, device-local time) — unavailable during
     // SSR, so this can't be derived at render time; a mount effect is the correct place.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setMealType(defaultMealType(new Date().getHours(), DASHBOARD_CONFIG.mealType));
     setEntryDate(todayLocal());
     setIdempotencyKey(crypto.randomUUID());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // A fresh key after every successful save (NFR-29): a duplicate submit of the SAME save
   // is protected by reusing the key across retries, but the next entry is a new save and
-  // must not collide with the one just recorded.
+  // must not collide with the one just recorded. Edits don't mint or consume a key at all
+  // (AC-M18 — an edit is an UPDATE, not a new INSERT).
   useEffect(() => {
     if (state.status === "success") {
-      // Drawing a fresh idempotency key in response to the action's result, not state
-      // derived from props/render.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setIdempotencyKey(crypto.randomUUID());
+      if (!editEntry) {
+        // Drawing a fresh idempotency key in response to the action's result, not state
+        // derived from props/render.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setIdempotencyKey(crypto.randomUUID());
+      }
+      onMutationSuccess?.();
+      if (editEntry) onEditComplete?.();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state]);
 
-  const ready = mealType !== null && entryDate !== null && idempotencyKey !== null;
+  const ready = editEntry
+    ? mealType !== null && entryDate !== null
+    : mealType !== null && entryDate !== null && idempotencyKey !== null;
 
   return (
     <div className="space-y-6">
-      <h1 className="text-lg font-semibold tracking-tight">Log meal</h1>
+      <h1 className="text-lg font-semibold tracking-tight">{editEntry ? "Edit meal" : "Log meal"}</h1>
 
-      <form action={formAction} className="space-y-4">
+      <form key={editEntry?.id ?? "new"} action={formAction} className="space-y-4">
+        {editEntry ? <input type="hidden" name="id" value={editEntry.id} /> : null}
         <input type="hidden" name="idempotencyKey" value={idempotencyKey ?? ""} />
 
         <div className="flex gap-2" role="group" aria-label="Meal type">
@@ -119,7 +151,12 @@ export function LogMealForm() {
 
         <label className="block text-sm">
           Description <span className="text-zinc-400">(optional)</span>
-          <input type="text" name="description" className={`mt-1 ${inputClass}`} />
+          <input
+            type="text"
+            name="description"
+            defaultValue={editEntry?.description ?? undefined}
+            className={`mt-1 ${inputClass}`}
+          />
         </label>
 
         <div className="grid grid-cols-2 gap-3">
@@ -132,6 +169,7 @@ export function LogMealForm() {
               min={0}
               step="any"
               required
+              defaultValue={editEntry?.calories ?? undefined}
               className={`mt-1 ${inputClass}`}
             />
           </label>
@@ -143,6 +181,7 @@ export function LogMealForm() {
               name="proteinG"
               min={0}
               step="any"
+              defaultValue={editEntry?.proteinG ?? undefined}
               className={`mt-1 ${inputClass}`}
             />
           </label>
@@ -154,6 +193,7 @@ export function LogMealForm() {
               name="carbsG"
               min={0}
               step="any"
+              defaultValue={editEntry?.carbsG ?? undefined}
               className={`mt-1 ${inputClass}`}
             />
           </label>
@@ -165,6 +205,7 @@ export function LogMealForm() {
               name="fatG"
               min={0}
               step="any"
+              defaultValue={editEntry?.fatG ?? undefined}
               className={`mt-1 ${inputClass}`}
             />
           </label>
@@ -176,7 +217,20 @@ export function LogMealForm() {
           </p>
         ) : null}
 
-        <SubmitButton ready={ready} />
+        <div className="flex items-center gap-3">
+          <SubmitButton ready={ready} />
+          {editEntry ? (
+            // AC-M20: cancel is a plain button, not a submit — no action runs, so the
+            // entry and its timestamps are left exactly as they were.
+            <button
+              type="button"
+              onClick={() => onEditComplete?.()}
+              className="rounded-md border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-600 dark:border-zinc-800 dark:text-zinc-300"
+            >
+              Cancel
+            </button>
+          ) : null}
+        </div>
       </form>
 
       {state.status === "success" && state.totals ? (
