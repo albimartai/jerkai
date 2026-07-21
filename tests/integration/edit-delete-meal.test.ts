@@ -52,6 +52,19 @@ async function saveOne(overrides: Partial<Parameters<typeof saveMealEntry>[0]> =
   return entry;
 }
 
+describe("AC-M21/AC-M23 regression — id is a real number, not a bigint string", () => {
+  it("fetchMealEntriesForDate returns a numeric id that strictly-equals a Number()-parsed FormData id", async () => {
+    const entry = await saveOne();
+    expect(typeof entry.id).toBe("number");
+    // deleteMealEntryAction derives deletedId via Number(formData.get("id")) and the UI
+    // matches it against entry.id with strict equality — a string id here (the Neon driver's
+    // untyped bigint/bigserial behavior) would silently break that match and leave a
+    // successfully-deleted row still showing in the list (the bug this test guards against).
+    const deletedId = Number(String(entry.id));
+    expect(deletedId).toBe(entry.id);
+  });
+});
+
 describe("AC/NFR-39 — updated_at column", () => {
   it("defaults updated_at to the insert-time value, equal to created_at, for a never-edited row", async () => {
     const entry = await saveOne();

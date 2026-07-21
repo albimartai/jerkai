@@ -77,8 +77,13 @@ const toMealEntryRow = (row: MealEntryDbRow): MealEntryRow => ({
   updatedAt: row.updated_at,
 });
 
+// id::int (bigserial cast down to int4): the driver returns bigint/bigserial columns as JS
+// strings to avoid precision loss outside the safe integer range, which silently breaks any
+// strict `===` comparison against a MealEntryRow.id computed elsewhere as a real number (as
+// deleteMealEntryAction's returned deletedId is). A single-user app's row count will never
+// approach int4's range, so this cast is safe and keeps id a real number everywhere.
 const MEAL_ENTRY_COLUMNS = `
-  id, meal_type, to_char(entry_date, 'YYYY-MM-DD') as entry_date, description,
+  id::int as id, meal_type, to_char(entry_date, 'YYYY-MM-DD') as entry_date, description,
   calories::float8 as calories, protein_g::float8 as protein_g,
   carbs_g::float8 as carbs_g, fat_g::float8 as fat_g, created_at, updated_at
 `;
