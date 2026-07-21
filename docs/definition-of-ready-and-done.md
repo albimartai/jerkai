@@ -1,10 +1,10 @@
 # JerkAI — Definition of Ready & Done (Standard)
 
-**Type:** Durable standard — the one shared definition of DoR and the **baseline** DoD for every JerkAI slice. Each build PRD references this and adds only its own **feature-specific** completion criteria (never restating the baseline). See [[JerkAI - Decision Log]] DL-2026-07-16-e.
-
-**Canonical source is this vault file.** The repo carries a build-time snapshot at `docs/definition-of-ready-and-done.md` (authored/refreshed by a Claude Code session), the same source-in-vault / snapshot-in-repo pattern used for build PRDs. When this standard changes, update here and re-snapshot the repo copy — do not edit the two independently.
-
-**Last updated:** 2026-07-21
+> **Type:** Durable standard — the one shared definition of DoR and the **baseline** DoD for every JerkAI slice. Each build PRD references this and adds only its own **feature-specific** completion criteria (never restating the baseline). See [[JerkAI - Decision Log]] DL-2026-07-16-e.
+>
+> **Canonical source is this vault file.** The repo carries a build-time snapshot at `docs/definition-of-ready-and-done.md` (authored/refreshed by a Claude Code session), the same source-in-vault / snapshot-in-repo pattern used for build PRDs. When this standard changes, update here and re-snapshot the repo copy — do not edit the two independently.
+>
+> **Last updated:** 2026-07-21
 
 ---
 
@@ -34,6 +34,7 @@ A slice is ready to enter development when all of these are true:
 - [ ] **Dependencies / blockers identified** — including which other slices must ship first.
 - [ ] **Design / reference artifact linked** — wireframe, hi-fi, or spec the build follows.
 - [ ] **Dev environment plan clear** — Neon dev branch, migration plan, env vars.
+- [ ] **Production migration plan clear (if the slice has a migration)** — how the migration reaches prod (the automated `migrate:prod` job once it exists, else the manual diagnose→snapshot→apply→verify release step), identified before build, not discovered at deploy (DL-2026-07-21-c).
 
 ## Definition of Done — baseline (exit gate, every slice)
 
@@ -41,13 +42,13 @@ A slice is done only when all of these are true, **in addition to** the feature-
 
 - [ ] **All acceptance criteria met** and demonstrably covered by tests (node-env unit + disposable-Neon integration + jsdom interactive component, as applicable to the AC), authored TDD-style from the ACs.
 - [ ] **CI green** — lint + typecheck + unit + jsdom component + integration on a disposable Neon branch.
+- [ ] **Migrations applied to production.** If the slice carries a migration, it is not done until that migration is applied to the production Neon database — `npm run migrate` (dev, `--envPath .env.local`) and `migrate:ci` (disposable test branch) do **not** touch prod. Once the automated prod-migrate path exists (`migrate:prod` + the on-merge-to-`main` GitHub Actions job against the `PRODUCTION_DATABASE_URL` secret, DL-2026-07-21-c), this item is satisfied by that job running green on merge; until then it is a manual release step (diagnose prod's `pgmigrations` ledger → snapshot prod → apply → verify). The production connection string is a live credential (Sensitive in Vercel) — never share it into an agent session or commit it; the agent prepares the command, a human runs the prod write. Added after the 2026-07-21 incident where the Log Meal + Edit & Delete Meal tables never reached prod (DL-2026-07-21-c).
 - [ ] **Behind auth** — Auth.js magic-link; no real biometric/nutrition data reachable on any public/demo route.
 - [ ] **Responsive** — usable on a phone browser.
 - [ ] **Shared date key** — dated data normalized to the device-local calendar day where the slice touches it.
 - [ ] **Raw-data-preserved** — raw values shown/stored; trends/derivations computed at render time, never overwriting raw records.
 - [ ] **Secret hygiene intact** — no secrets committed; gitleaks pre-commit + GitHub secret scanning passing.
 - [ ] **Merged via PR** (not direct to `main`), with the DoD checklist completed in the PR.
-- [ ] **Migrations reach production.** Any migration this slice adds is not done just because it landed on the dev/disposable Neon branches — it must also apply cleanly to the persistent production branch (the `migrate-production` CI job runs this automatically on merge to `main`; confirm it went green, since a merged migration file with no production run leaves prod's schema silently behind, as happened with the Log Meal and Edit & Delete Meal migrations before this safeguard existed).
 - [ ] **Product-truth reconciliation flagged.** Any material change to product facts — scope, north-star / driver metrics, or a decision — surfaced during the slice is called out in the PR summary for reconciliation into [[JerkAI - Product Brief]] and [[JerkAI - Decision Log]]. This flag is the build session's responsibility; the vault edits themselves are a PM step, **not** performed by the build agent. When the Brief changes, re-snapshot `docs/context.md` into the repo so the repo's product context doesn't drift from the vault.
 
 ## How PRDs use this
