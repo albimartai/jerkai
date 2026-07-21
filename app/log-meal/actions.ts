@@ -2,6 +2,14 @@
 
 import { revalidatePath } from "next/cache";
 
+import {
+  initialDeleteMealState,
+  initialEditMealState,
+  initialLogMealState,
+  type DeleteMealState,
+  type EditMealState,
+  type LogMealState,
+} from "@/app/log-meal/action-state";
 import { auth } from "@/auth";
 import {
   dailyTotals,
@@ -9,31 +17,17 @@ import {
   fetchMealEntriesForDate,
   saveMealEntry,
   updateMealEntry,
-  type DailyTotals,
   type MealEntryRow,
 } from "@/lib/meal-entries";
 import { validateMealEntryInput } from "@/lib/meal-entry-validation";
-import { resolveTargetForDate, fetchTargets, type TargetRow } from "@/lib/targets";
+import { resolveTargetForDate, fetchTargets } from "@/lib/targets";
 
 // Server Actions are POST endpoints reachable to anyone who can send the request, not just
 // through this form — auth is re-checked here even though the page is already gated
 // (Next.js Server Actions guide: render-time gating is not a security boundary).
-
-export type LogMealState = {
-  status: "idle" | "success" | "error";
-  errors: string[];
-  entryDate: string | null;
-  totals: DailyTotals | null;
-  target: TargetRow | null;
-};
-
-export const initialLogMealState: LogMealState = {
-  status: "idle",
-  errors: [],
-  entryDate: null,
-  totals: null,
-  target: null,
-};
+//
+// This file only exports async functions (Next's "use server" constraint) — state types
+// and initial-state constants live in ./action-state instead.
 
 export async function logMealAction(
   _prevState: LogMealState,
@@ -90,22 +84,6 @@ export async function logMealAction(
 
 // Edit & Delete Meal (docs/prd/edit-delete-meal.md), extending the Log Meal action file
 // rather than forking a new surface — same three-layer auth pattern as logMealAction.
-
-export type EditMealState = {
-  status: "idle" | "success" | "error";
-  errors: string[];
-  entryDate: string | null;
-  totals: DailyTotals | null;
-  target: TargetRow | null;
-};
-
-export const initialEditMealState: EditMealState = {
-  status: "idle",
-  errors: [],
-  entryDate: null,
-  totals: null,
-  target: null,
-};
 
 export async function updateMealEntryAction(
   _prevState: EditMealState,
@@ -166,18 +144,6 @@ export async function updateMealEntryAction(
     target: resolveTargetForDate(targets, entryDate),
   };
 }
-
-export type DeleteMealState = {
-  status: "idle" | "success" | "error";
-  errors: string[];
-  deletedId: number | null;
-};
-
-export const initialDeleteMealState: DeleteMealState = {
-  status: "idle",
-  errors: [],
-  deletedId: null,
-};
 
 export async function deleteMealEntryAction(
   _prevState: DeleteMealState,

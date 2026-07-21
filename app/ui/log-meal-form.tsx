@@ -3,12 +3,8 @@
 import { useActionState, useEffect, useState } from "react";
 import { useFormStatus } from "react-dom";
 
-import {
-  logMealAction,
-  initialLogMealState,
-  updateMealEntryAction,
-  initialEditMealState,
-} from "@/app/log-meal/actions";
+import { initialEditMealState, initialLogMealState } from "@/app/log-meal/action-state";
+import { logMealAction, updateMealEntryAction } from "@/app/log-meal/actions";
 import { DASHBOARD_CONFIG } from "@/lib/dashboard/config";
 import { defaultMealType, type MealType } from "@/lib/dashboard/meal-type";
 import type { MealEntryRow } from "@/lib/meal-entries";

@@ -2,7 +2,8 @@
 
 import { useActionState, useEffect, useState } from "react";
 
-import { deleteMealEntryAction, initialDeleteMealState, listMealEntriesForDate } from "@/app/log-meal/actions";
+import { initialDeleteMealState } from "@/app/log-meal/action-state";
+import { deleteMealEntryAction, listMealEntriesForDate } from "@/app/log-meal/actions";
 import { todayLocal } from "@/app/ui/log-meal-form";
 import type { MealEntryRow } from "@/lib/meal-entries";
 
