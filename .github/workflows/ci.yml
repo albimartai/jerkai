@@ -47,6 +47,9 @@ jobs:
       - name: Unit tests
         run: npm test
 
+      - name: Component tests
+        run: npm run test:component
+
       - name: Create disposable Neon branch
         id: neon
         run: node scripts/ci/neon-branch.mjs create
