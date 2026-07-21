@@ -60,7 +60,10 @@ hero stall badge shown here is the same one described above.
 ## Later, separate slices (not built here)
 - **Log Meal fast-follows:** edit/delete shipped (`docs/prd/edit-delete-meal.md`) — a
   logged meal can be corrected or removed in place, with the running total, the calories
-  strip, and scrub readouts recomputing immediately. Still deferred: Favorites/Recents
+  strip, and scrub readouts recomputing immediately. The `/log-meal` entries list now
+  tracks whichever day the form's date field is set to, rather than only today
+  (`docs/prd/date-scoped-entries-list.md`) — editing an entry onto a different day follows
+  the list there so it stays reachable for further edit/delete. Still deferred: Favorites/Recents
   quick-add, and free-text LLM estimation (pending an accuracy-tolerance decision — JerkAI
   does not currently estimate macros at all). The Weekly Ledger's adherence column
   (days-in-range per week) is also a separate follow-up.

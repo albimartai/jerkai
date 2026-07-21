@@ -50,12 +50,16 @@ const inputClass =
 
 export function LogMealForm({
   editEntry = null,
+  entryDate: entryDateProp,
+  onDateChange,
   onEditComplete,
   onMutationSuccess,
 }: {
   editEntry?: MealEntryRow | null;
+  entryDate?: string | null;
+  onDateChange?: (date: string) => void;
   onEditComplete?: () => void;
-  onMutationSuccess?: () => void;
+  onMutationSuccess?: (entryDate: string) => void;
 } = {}) {
   const [state, formAction] = useActionState(
     editEntry ? updateMealEntryAction : logMealAction,
@@ -67,16 +71,38 @@ export function LogMealForm({
   // mode (AC-M17) editEntry is only ever set by a user click, never on initial render, so
   // its values are known up front — no mount-effect wait needed there.
   const [mealType, setMealType] = useState<MealType | null>(editEntry?.mealType ?? null);
-  const [entryDate, setEntryDate] = useState<string | null>(editEntry?.entryDate ?? null);
+  // PRD §9 IN-2: edit mode keeps a local, save-scoped date copy; create mode is fully
+  // controlled by the entryDate/onDateChange props (LogMealPanel is the single date owner,
+  // NFR-40) — no local mirror there. The `?? todayLocal()` fallback only covers
+  // standalone/test rendering with no parent-supplied date; in production the panel always
+  // supplies a non-null date because it gates children on entryDate !== null.
+  const [editDate, setEditDate] = useState<string | null>(editEntry?.entryDate ?? null);
+  // Fallback only for standalone/test rendering with no parent-supplied date — in
+  // production LogMealPanel always supplies a non-null entryDate (it gates children on
+  // entryDate !== null), so this branch never fires there.
+  const createDate = entryDateProp ?? todayLocal();
   const [idempotencyKey, setIdempotencyKey] = useState<string | null>(null);
+
+  // editEntry is a prop, not a fresh mount — LogMealForm stays the same component instance
+  // across an Edit click (only the inner <form key={editEntry?.id ?? "new"}> remounts), so
+  // editDate's useState initializer runs once and does not re-seed on its own. This effect
+  // re-seeds the local edit-mode date whenever the edited entry changes, so the date input
+  // reliably starts on that entry's actual stored date (AC-M17).
+  useEffect(() => {
+    if (editEntry) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setEditDate(editEntry.entryDate);
+    }
+  }, [editEntry]);
 
   useEffect(() => {
     if (editEntry) return;
     // Reading the browser clock/locale (NFR-2, device-local time) — unavailable during
     // SSR, so this can't be derived at render time; a mount effect is the correct place.
+    // This effect still seeds mealType and idempotencyKey in create mode (PRD §9 IN-1) —
+    // it no longer owns the create-mode date, which comes from the entryDate prop.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setMealType(defaultMealType(new Date().getHours(), DASHBOARD_CONFIG.mealType));
-    setEntryDate(todayLocal());
     setIdempotencyKey(crypto.randomUUID());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -86,22 +112,27 @@ export function LogMealForm({
   // must not collide with the one just recorded. Edits don't mint or consume a key at all
   // (AC-M18 — an edit is an UPDATE, not a new INSERT).
   useEffect(() => {
-    if (state.status === "success") {
+    if (state.status === "success" && state.entryDate) {
       if (!editEntry) {
         // Drawing a fresh idempotency key in response to the action's result, not state
         // derived from props/render.
         // eslint-disable-next-line react-hooks/set-state-in-effect
         setIdempotencyKey(crypto.randomUUID());
       }
-      onMutationSuccess?.();
+      // PRD §9 IN-3/DL-2026-07-21-a2: state.entryDate is the saved (possibly edited) date
+      // on both the create and edit success branches — snapping the page to it closes the
+      // AC-M27/AC-M28 reachability gap. onEditComplete only clears edit mode (PRD §9 IN-5)
+      // and must not itself touch the page date — Cancel also calls it.
+      onMutationSuccess?.(state.entryDate);
       if (editEntry) onEditComplete?.();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state]);
 
+  const entryDate = editEntry ? editDate : createDate;
   const ready = editEntry
-    ? mealType !== null && entryDate !== null
-    : mealType !== null && entryDate !== null && idempotencyKey !== null;
+    ? mealType !== null && editDate !== null
+    : mealType !== null && createDate !== null && idempotencyKey !== null;
 
   return (
     <div className="space-y-6">
@@ -140,7 +171,13 @@ export function LogMealForm({
             type="date"
             name="entryDate"
             value={entryDate ?? ""}
-            onChange={(event) => setEntryDate(event.target.value)}
+            onChange={(event) => {
+              if (editEntry) {
+                setEditDate(event.target.value);
+              } else {
+                onDateChange?.(event.target.value);
+              }
+            }}
             className={`mt-1 ${inputClass}`}
           />
         </label>

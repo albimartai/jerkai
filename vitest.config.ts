@@ -31,6 +31,17 @@ export default defineConfig({
           fileParallelism: false,
         },
       },
+      {
+        // Interactive component tests (DL-2026-07-21-b): simulate a DOM event and assert a
+        // re-render/re-fetch, which node-env unit tests and string-match rendering can't
+        // express. Mocks server actions via vi.mock — no DATABASE_URL needed.
+        resolve: { alias },
+        test: {
+          name: "component",
+          environment: "jsdom",
+          include: ["tests/component/**/*.test.tsx"],
+        },
+      },
     ],
   },
 });
