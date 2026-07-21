@@ -42,6 +42,7 @@ Unified-schema conventions (verified against real ingested history, 2026-07-14):
 
 - `npm run migrate` applies pending migrations (uses `DATABASE_URL` from `.env.local`)
 - `npm run migrate:create <name>` scaffolds a new migration
+- `npm run migrate:prod` applies pending migrations to the production Neon branch — run automatically by the `migrate-production` CI job on every merge to `main` (after tests pass), using the `PRODUCTION_DATABASE_URL` repo secret. Before this existed, migrations reached the dev branch (used by local dev and Preview deployments) but never production, so a merged migration file did not mean production's schema was actually up to date — this is why every migration-adding slice must confirm the CI job went green, not just that the file landed on `main`.
 
 ## Environments
 

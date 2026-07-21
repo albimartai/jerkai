@@ -47,6 +47,7 @@ A slice is done only when all of these are true, **in addition to** the feature-
 - [ ] **Raw-data-preserved** — raw values shown/stored; trends/derivations computed at render time, never overwriting raw records.
 - [ ] **Secret hygiene intact** — no secrets committed; gitleaks pre-commit + GitHub secret scanning passing.
 - [ ] **Merged via PR** (not direct to `main`), with the DoD checklist completed in the PR.
+- [ ] **Migrations reach production.** Any migration this slice adds is not done just because it landed on the dev/disposable Neon branches — it must also apply cleanly to the persistent production branch (the `migrate-production` CI job runs this automatically on merge to `main`; confirm it went green, since a merged migration file with no production run leaves prod's schema silently behind, as happened with the Log Meal and Edit & Delete Meal migrations before this safeguard existed).
 - [ ] **Product-truth reconciliation flagged.** Any material change to product facts — scope, north-star / driver metrics, or a decision — surfaced during the slice is called out in the PR summary for reconciliation into [[JerkAI - Product Brief]] and [[JerkAI - Decision Log]]. This flag is the build session's responsibility; the vault edits themselves are a PM step, **not** performed by the build agent. When the Brief changes, re-snapshot `docs/context.md` into the repo so the repo's product context doesn't drift from the vault.
 
 ## How PRDs use this
