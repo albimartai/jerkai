@@ -113,5 +113,7 @@ Same as prior build sessions, restated for self-containment: TDD — write the t
 ## 8. Open Questions
 
 * OQ-1 (non-blocking, default provided) — resolved as specified: the day's entries list lives directly below the Log Meal form on `/log-meal` (`app/ui/log-meal-panel.tsx`, `app/ui/meal-entries-list.tsx`), each entry inline-editable via Edit (lifts the entry into `LogMealForm`'s `editEntry` prop).
+
+  **Residual gap closed (2026-07-21):** the list was scoped as today-only, so an entry re-attributed to a past day via AC-M19 became unreachable through the `/log-meal` UI (no in-UI path back to that day). This was closed by `docs/prd/date-scoped-entries-list.md` — the list now follows a single page-wide date context owned by `LogMealPanel`, which snaps to the saved date after any edit/create save.
 * OQ-2 (non-blocking, default provided) — resolved as specified: delete confirm is a lightweight inline Confirm/Cancel step per row, not a modal.
 * OQ-3 (non-blocking) — not separately built: an edit that moves an entry to a targetless day falls through to the same `state.target === null` branch `LogMealForm` already renders for a new entry (AC-M11's passive "set a target" prompt), since both edit and new-entry saves return through the same `totals`/`target` shape. No new component was needed.
