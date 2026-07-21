@@ -28,9 +28,9 @@ The pre-commit hook requires gitleaks on your PATH (`brew install gitleaks`).
 
 One migration-managed schema, applied to both Neon branches. `biometric_readings` stores one row per source/metric/date in a tall shape, so metrics from different sources join on a shared date key.
 
-Log Meal (`docs/prd/log-meal.md`) adds the first write path since ingest, in two insert-only tables — the app never updates or deletes a row in either; correction is a separate fast-follow (edit/delete):
+Log Meal (`docs/prd/archive/log-meal.md`) added the first write path since ingest, in two tables. `daily_targets` stays insert-only. `manual_macro_entries` gained in-place edit and hard-delete in the Edit & Delete Meal fast-follow (`docs/prd/edit-delete-meal.md`):
 
-- `manual_macro_entries` — one row per logged meal: `meal_type` (breakfast/lunch/dinner/snack), `entry_date`, optional `description`, `calories` (required) plus optional `protein_g`/`carbs_g`/`fat_g`, persisted exactly as typed — the app never estimates or derives a macro. `idempotency_key` is unique, so a retried/double-tapped submit is a no-op rather than a duplicate row.
+- `manual_macro_entries` — one row per logged meal: `meal_type` (breakfast/lunch/dinner/snack), `entry_date`, optional `description`, `calories` (required) plus optional `protein_g`/`carbs_g`/`fat_g`, persisted exactly as typed — the app never estimates or derives a macro. `idempotency_key` is unique, so a retried/double-tapped submit is a no-op rather than a duplicate row. `created_at` is set once, at insert. `updated_at` (added by Edit & Delete Meal, `docs/prd/edit-delete-meal.md`) defaults to the insert-time value and is bumped only when an in-place edit actually changes a value (a no-op save leaves it untouched); a delete is a hard delete of the row, not a tombstone.
 - `daily_targets` — effective-dated daily targets (`calories_target` and `protein_target_g` required, `carbs_target_g`/`fat_target_g` optional). Changing a target inserts a new row with a later `effective_date`; existing rows are never updated, so which target governed a past day never changes. "Which target is in force on day X" is resolved by one pure function, `lib/targets.ts#resolveTargetForDate`.
 
 Unified-schema conventions (verified against real ingested history, 2026-07-14):

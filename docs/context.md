@@ -9,7 +9,8 @@ A single-user personal health dashboard that turns a noisy daily body-fat readin
 North star: **body fat % trend** (7-day and 30-day rolling average) as the decision signal — but the **raw daily reading is always shown alongside it, never hidden or replaced**. Raw = record of truth; trend = the lens for deciding whether anything changed.
 
 - **Energy balance** — *driver* — calories/macros vs target, from manual meal logging (Log
-  Meal, shipped: `/log-meal` + Settings → Targets, `docs/prd/log-meal.md`). JerkAI stores
+  Meal, shipped: `/log-meal` + Settings → Targets, `docs/prd/archive/log-meal.md`,
+  `docs/prd/edit-delete-meal.md`). JerkAI stores
   what's entered; it does not estimate macros — that happens outside the app.
 - **Training** — *driver* — **Whoop Day Strain (Cycle Strain, 0–21)**, from the Whoop API. NOT workout-log tonnage (tonnage is permanently not a dashboard metric).
 - **Recovery Score** — *guardrail* — Whoop's own Recovery Score, via the direct Whoop API. Surfaced as a guardrail readout plus a strip inside the collapsible Whoop detail, not a main-stack strip (decision DL-2026-07-18-a).
@@ -47,7 +48,7 @@ hero stall badge shown here is the same one described above.
 - **Weight is a main-stack strip** (Fitdays, already ingested), added below body fat
   (decision DL-2026-07-18-b). It is a strip in its own right, not a north-star/driver/
   guardrail metric.
-- **Calories-vs-target strip** (Log Meal, `docs/prd/log-meal.md`): daily bars colored
+- **Calories-vs-target strip** (Log Meal, `docs/prd/archive/log-meal.md`): daily bars colored
   over/under that day's effective target, not the dots+trend treatment — logged intake is a
   discrete daily behavior where the daily value is the decision-relevant mark
   (DL-pending-2). Each day resolves against whatever target was in force *that day*
@@ -57,10 +58,12 @@ hero stall badge shown here is the same one described above.
   once its feature ships. **"+ Log workout" stays absent** until its slice ships.
 
 ## Later, separate slices (not built here)
-- **Log Meal fast-follows:** edit/delete (a wrong entry is uncorrectable until this ships),
-  Favorites/Recents quick-add, and free-text LLM estimation (deferred pending an
-  accuracy-tolerance decision — JerkAI does not currently estimate macros at all). The
-  Weekly Ledger's adherence column (days-in-range per week) is also a separate follow-up.
+- **Log Meal fast-follows:** edit/delete shipped (`docs/prd/edit-delete-meal.md`) — a
+  logged meal can be corrected or removed in place, with the running total, the calories
+  strip, and scrub readouts recomputing immediately. Still deferred: Favorites/Recents
+  quick-add, and free-text LLM estimation (pending an accuracy-tolerance decision — JerkAI
+  does not currently estimate macros at all). The Weekly Ledger's adherence column
+  (days-in-range per week) is also a separate follow-up.
 - **Log Workout:** free text → LLM parse → editable Movement/Set/Reps/Load table → Draft/Completed. Parse extracts only what the text states and never invents a load. Standalone screen, **not** surfaced on the dashboard. No dashboard dependency.
 
 ## Delivery principle

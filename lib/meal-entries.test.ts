@@ -14,6 +14,7 @@ const entry = (overrides: Partial<MealEntryRow>): MealEntryRow => ({
   carbsG: 40,
   fatG: 15,
   createdAt: "2026-07-20T12:00:00.000Z",
+  updatedAt: "2026-07-20T12:00:00.000Z",
   ...overrides,
 });
 
