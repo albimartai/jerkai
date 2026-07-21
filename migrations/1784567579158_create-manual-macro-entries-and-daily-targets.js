@@ -4,10 +4,13 @@
 export const shorthands = undefined;
 
 /**
- * Log Meal (docs/prd/log-meal.md): the first write path since ingest. Two insert-only
- * tables — the app never updates or deletes a row in either. manual_macro_entries is what
- * the user typed, exactly (NFR-28: raw-preserved, never mutated by computation). Correction
- * is edit/delete's job, a separate fast-follow slice (AC-M7) — not this migration.
+ * Log Meal (docs/prd/log-meal.md): the first write path since ingest. manual_macro_entries
+ * is what the user typed, exactly (NFR-28: raw-preserved, never mutated by *computation* —
+ * totals/colors/TDEE math are always derived downstream, never written back). At the time
+ * this migration landed, the app had no correction path at all: edit/delete shipped later
+ * as its own fast-follow slice (AC-M7, docs/prd/edit-delete-meal.md), which added the
+ * updated_at column and the in-place UPDATE/DELETE paths — see that slice's migration.
+ * daily_targets remains insert-only; the app never updates or deletes a row there.
  *
  * daily_targets is effective-dated (DL-pending-3): "changing a target" means inserting a
  * new row with a later effective_date, so which target governed a past day never changes.
