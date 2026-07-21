@@ -83,6 +83,18 @@ export function LogMealForm({
   const createDate = entryDateProp ?? todayLocal();
   const [idempotencyKey, setIdempotencyKey] = useState<string | null>(null);
 
+  // editEntry is a prop, not a fresh mount — LogMealForm stays the same component instance
+  // across an Edit click (only the inner <form key={editEntry?.id ?? "new"}> remounts), so
+  // editDate's useState initializer runs once and does not re-seed on its own. This effect
+  // re-seeds the local edit-mode date whenever the edited entry changes, so the date input
+  // reliably starts on that entry's actual stored date (AC-M17).
+  useEffect(() => {
+    if (editEntry) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setEditDate(editEntry.entryDate);
+    }
+  }, [editEntry]);
+
   useEffect(() => {
     if (editEntry) return;
     // Reading the browser clock/locale (NFR-2, device-local time) — unavailable during
