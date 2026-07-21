@@ -4,13 +4,18 @@ import { useActionState, useEffect, useState } from "react";
 
 import { initialDeleteMealState } from "@/app/log-meal/action-state";
 import { deleteMealEntryAction, listMealEntriesForDate } from "@/app/log-meal/actions";
-import { todayLocal } from "@/app/ui/log-meal-form";
+import { headingFor } from "@/lib/meal-entries-list-heading";
 import type { MealEntryRow } from "@/lib/meal-entries";
 
-// AC-M16: today's logged meals, each with Edit and Delete. Reads via listMealEntriesForDate
-// (a plain "use server" function called imperatively — there's no client fetch/SWR anywhere
-// in this codebase and no route handler for meal data). refreshToken bumps whenever a save
-// (new entry or edit) completes elsewhere on the page, triggering a re-fetch here.
+// AC-M16: the viewed day's logged meals, each with Edit and Delete. Reads via
+// listMealEntriesForDate (a plain "use server" function called imperatively — there's no
+// client fetch/SWR anywhere in this codebase and no route handler for meal data).
+// refreshToken bumps whenever a save (new entry or edit) completes elsewhere on the page,
+// triggering a re-fetch here.
+//
+// Date-Scoped Entries List (docs/prd/date-scoped-entries-list.md, NFR-40): entryDate is now
+// a controlled prop from LogMealPanel, the page's single date owner — this component no
+// longer seeds its own todayLocal() copy.
 
 const MEAL_TYPE_LABEL: Record<MealEntryRow["mealType"], string> = {
   breakfast: "Breakfast",
@@ -20,26 +25,23 @@ const MEAL_TYPE_LABEL: Record<MealEntryRow["mealType"], string> = {
 };
 
 export function MealEntriesList({
+  entryDate,
   refreshToken,
   onEdit,
   onDeleted,
 }: {
+  entryDate: string;
   refreshToken: number;
   onEdit: (entry: MealEntryRow) => void;
   onDeleted?: () => void;
 }) {
-  const [entryDate, setEntryDate] = useState<string | null>(null);
   const [entries, setEntries] = useState<MealEntryRow[] | null>(null);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setEntryDate(todayLocal());
-  }, []);
-
-  useEffect(() => {
-    if (entryDate === null) return;
     let cancelled = false;
     listMealEntriesForDate(entryDate).then((rows) => {
+      // NFR-42: drop a late-arriving response for a date/refresh combo that's no longer
+      // current — a stale-fetch race must never overwrite the currently-selected day's rows.
       if (!cancelled) setEntries(rows);
     });
     return () => {
@@ -47,11 +49,13 @@ export function MealEntriesList({
     };
   }, [entryDate, refreshToken]);
 
-  if (entryDate === null || entries === null) return null;
+  if (entries === null) return null;
 
   return (
     <div className="space-y-2">
-      <h2 className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">Today&rsquo;s meals</h2>
+      <h2 className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">
+        {headingFor(entryDate)}
+      </h2>
       {entries.length === 0 ? (
         <p className="text-sm text-zinc-400">Nothing logged yet.</p>
       ) : (
