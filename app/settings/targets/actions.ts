@@ -6,12 +6,7 @@ import { auth } from "@/auth";
 import { saveTarget } from "@/lib/targets";
 import { validateTargetInput } from "@/lib/target-validation";
 
-export type SaveTargetState = {
-  status: "idle" | "success" | "error";
-  errors: string[];
-};
-
-export const initialSaveTargetState: SaveTargetState = { status: "idle", errors: [] };
+import type { SaveTargetState } from "@/app/settings/targets/action-state";
 
 export async function saveTargetAction(
   _prevState: SaveTargetState,
