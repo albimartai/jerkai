@@ -4,10 +4,11 @@ import { alignSeries } from "@/lib/dashboard/series";
 import type { MealType } from "@/lib/dashboard/meal-type";
 import type { TargetRow } from "@/lib/targets";
 
-// The Log Meal write path (docs/prd/log-meal.md). Insert-only: manual_macro_entries is
-// never updated or deleted here (AC-M7 — edit/delete is a separate fast-follow slice).
-// Values persist exactly as typed (NFR-28) — this module never rounds or derives a macro
-// the user didn't enter.
+// The Log Meal write path (docs/prd/log-meal.md), extended by Edit & Delete Meal
+// (docs/prd/edit-delete-meal.md) with in-place update and hard-delete. Values persist
+// exactly as typed on both insert and edit (NFR-28) — this module never rounds or derives
+// a macro the user didn't enter; totals/colors/strips are always derived downstream from
+// whatever rows currently exist, never written back as a stored aggregate (NFR-35).
 
 export type MealEntryRow = {
   id: number;
@@ -19,6 +20,7 @@ export type MealEntryRow = {
   carbsG: number | null;
   fatG: number | null;
   createdAt: string;
+  updatedAt: string;
 };
 
 export type NewMealEntry = {
@@ -59,6 +61,7 @@ type MealEntryDbRow = {
   carbs_g: number | null;
   fat_g: number | null;
   created_at: string;
+  updated_at: string;
 };
 
 const toMealEntryRow = (row: MealEntryDbRow): MealEntryRow => ({
@@ -71,19 +74,95 @@ const toMealEntryRow = (row: MealEntryDbRow): MealEntryRow => ({
   carbsG: row.carbs_g,
   fatG: row.fat_g,
   createdAt: row.created_at,
+  updatedAt: row.updated_at,
 });
+
+const MEAL_ENTRY_COLUMNS = `
+  id, meal_type, to_char(entry_date, 'YYYY-MM-DD') as entry_date, description,
+  calories::float8 as calories, protein_g::float8 as protein_g,
+  carbs_g::float8 as carbs_g, fat_g::float8 as fat_g, created_at, updated_at
+`;
 
 export async function fetchMealEntriesForDate(entryDate: string): Promise<MealEntryRow[]> {
   const sql = getSql();
   const rows = (await sql`
-    select id, meal_type, to_char(entry_date, 'YYYY-MM-DD') as entry_date, description,
-           calories::float8 as calories, protein_g::float8 as protein_g,
-           carbs_g::float8 as carbs_g, fat_g::float8 as fat_g, created_at
+    select ${sql.unsafe(MEAL_ENTRY_COLUMNS)}
     from manual_macro_entries
     where entry_date = ${entryDate}
     order by created_at
   `) as MealEntryDbRow[];
   return rows.map(toMealEntryRow);
+}
+
+export type EditedMealEntry = {
+  id: number;
+  mealType: MealType;
+  entryDate: string;
+  description: string | null;
+  calories: number;
+  proteinG: number | null;
+  carbsG: number | null;
+  fatG: number | null;
+};
+
+export type UpdateMealEntryResult =
+  | { ok: true; entry: MealEntryRow }
+  | { ok: false; reason: "not_found" };
+
+// In-place update (AC-M18, DL-2026-07-20-b2 — never delete-and-re-add): same id, same
+// idempotency_key, created_at untouched. AC-M20: a no-op save (identical values resubmitted)
+// must not bump updated_at, so the incoming values are compared against the stored row
+// first and updated_at is only touched when something actually changed.
+export async function updateMealEntry(edit: EditedMealEntry): Promise<UpdateMealEntryResult> {
+  const sql = getSql();
+  const existingRows = (await sql`
+    select ${sql.unsafe(MEAL_ENTRY_COLUMNS)}
+    from manual_macro_entries
+    where id = ${edit.id}
+  `) as MealEntryDbRow[];
+  if (existingRows.length === 0) return { ok: false, reason: "not_found" };
+
+  const existing = toMealEntryRow(existingRows[0]);
+  const changed =
+    existing.mealType !== edit.mealType ||
+    existing.entryDate !== edit.entryDate ||
+    existing.description !== edit.description ||
+    existing.calories !== edit.calories ||
+    existing.proteinG !== edit.proteinG ||
+    existing.carbsG !== edit.carbsG ||
+    existing.fatG !== edit.fatG;
+
+  if (!changed) return { ok: true, entry: existing };
+
+  const rows = (await sql`
+    update manual_macro_entries
+    set meal_type = ${edit.mealType},
+        entry_date = ${edit.entryDate},
+        description = ${edit.description},
+        calories = ${edit.calories},
+        protein_g = ${edit.proteinG},
+        carbs_g = ${edit.carbsG},
+        fat_g = ${edit.fatG},
+        updated_at = now()
+    where id = ${edit.id}
+    returning ${sql.unsafe(MEAL_ENTRY_COLUMNS)}
+  `) as MealEntryDbRow[];
+  return { ok: true, entry: toMealEntryRow(rows[0]) };
+}
+
+export type DeleteMealEntryResult = { deleted: boolean; entry: MealEntryRow | null };
+
+// Hard delete (DL-2026-07-20-b1). Idempotent by nature — deleting an already-absent id is
+// not an error (NFR-37: delete-then-delete must never 500), the caller just learns nothing
+// was there to remove.
+export async function deleteMealEntry(id: number): Promise<DeleteMealEntryResult> {
+  const sql = getSql();
+  const rows = (await sql`
+    delete from manual_macro_entries
+    where id = ${id}
+    returning ${sql.unsafe(MEAL_ENTRY_COLUMNS)}
+  `) as MealEntryDbRow[];
+  return rows.length > 0 ? { deleted: true, entry: toMealEntryRow(rows[0]) } : { deleted: false, entry: null };
 }
 
 export type DailyTotals = {
