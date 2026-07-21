@@ -3,7 +3,8 @@
 import { useActionState, useEffect, useState } from "react";
 import { useFormStatus } from "react-dom";
 
-import { saveTargetAction, initialSaveTargetState } from "@/app/settings/targets/actions";
+import { saveTargetAction } from "@/app/settings/targets/actions";
+import { initialSaveTargetState } from "@/app/settings/targets/action-state";
 
 // AC-M10: kcal + protein required, carbs/fat optional; effective date defaults today.
 // Insert-only on the server — "saving" always means "starting a new effective period."
