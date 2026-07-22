@@ -66,11 +66,13 @@ export function LogMealForm({
     editEntry ? initialEditMealState : initialLogMealState,
   );
 
-  // Client-only defaults (AC-M1): null until the mount effect runs, so server render and
-  // first client render agree (no hydration mismatch) before local time is known. In edit
-  // mode (AC-M17) editEntry is only ever set by a user click, never on initial render, so
-  // its values are known up front — no mount-effect wait needed there.
+  // mealType is edit-mode-local (mirrors editDate below) — its useState initializer only
+  // runs once, at the form's true first mount, which always happens in create mode, so this
+  // seed only ever matters once an Edit click sets editEntry.
   const [mealType, setMealType] = useState<MealType | null>(editEntry?.mealType ?? null);
+  // Client-only default for create mode (AC-M1): null until the mount effect runs, so server
+  // render and first client render agree (no hydration mismatch) before local time is known.
+  const [createMealType, setCreateMealType] = useState<MealType | null>(null);
   // PRD §9 IN-2: edit mode keeps a local, save-scoped date copy; create mode is fully
   // controlled by the entryDate/onDateChange props (LogMealPanel is the single date owner,
   // NFR-40) — no local mirror there. The `?? todayLocal()` fallback only covers
@@ -95,14 +97,24 @@ export function LogMealForm({
     }
   }, [editEntry]);
 
+  // mealType is edit-mode-local (mirrors editDate above) — this re-seeds it whenever the
+  // edited entry changes, so the selector reliably starts on that entry's actual stored
+  // meal type (AC-M32/M33) instead of a leftover value from create mode or a prior edit.
+  useEffect(() => {
+    if (editEntry) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setMealType(editEntry.mealType);
+    }
+  }, [editEntry]);
+
   useEffect(() => {
     if (editEntry) return;
     // Reading the browser clock/locale (NFR-2, device-local time) — unavailable during
     // SSR, so this can't be derived at render time; a mount effect is the correct place.
-    // This effect still seeds mealType and idempotencyKey in create mode (PRD §9 IN-1) —
-    // it no longer owns the create-mode date, which comes from the entryDate prop.
+    // This effect still seeds createMealType and idempotencyKey in create mode (PRD §9
+    // IN-1) — it no longer owns the create-mode date, which comes from the entryDate prop.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setMealType(defaultMealType(new Date().getHours(), DASHBOARD_CONFIG.mealType));
+    setCreateMealType(defaultMealType(new Date().getHours(), DASHBOARD_CONFIG.mealType));
     setIdempotencyKey(crypto.randomUUID());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -130,9 +142,10 @@ export function LogMealForm({
   }, [state]);
 
   const entryDate = editEntry ? editDate : createDate;
+  const effectiveMealType = editEntry ? mealType : createMealType;
   const ready = editEntry
     ? mealType !== null && editDate !== null
-    : mealType !== null && createDate !== null && idempotencyKey !== null;
+    : createMealType !== null && createDate !== null && idempotencyKey !== null;
 
   return (
     <div className="space-y-6">
@@ -147,7 +160,7 @@ export function LogMealForm({
             <label
               key={value}
               className={`cursor-pointer rounded-full border px-3 py-1 text-sm ${
-                mealType === value
+                effectiveMealType === value
                   ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900"
                   : "border-zinc-200 text-zinc-600 dark:border-zinc-800 dark:text-zinc-300"
               }`}
@@ -156,8 +169,8 @@ export function LogMealForm({
                 type="radio"
                 name="mealType"
                 value={value}
-                checked={mealType === value}
-                onChange={() => setMealType(value)}
+                checked={effectiveMealType === value}
+                onChange={() => (editEntry ? setMealType(value) : setCreateMealType(value))}
                 className="sr-only"
               />
               {label}

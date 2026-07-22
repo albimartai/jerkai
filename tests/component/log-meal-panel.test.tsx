@@ -7,6 +7,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LogMealPanel } from "@/app/ui/log-meal-panel";
 import * as actions from "@/app/log-meal/actions";
 import type { MealEntryRow } from "@/lib/meal-entries";
+import { DASHBOARD_CONFIG } from "@/lib/dashboard/config";
+import { defaultMealType, type MealType } from "@/lib/dashboard/meal-type";
 
 // Date-Scoped Entries List (docs/prd/date-scoped-entries-list.md), NFR-44: interactive
 // component tests exercising DOM events + re-fetch/re-render, which the node-env unit tier
@@ -48,6 +50,26 @@ function deferred<T>() {
 
 function dateInputs() {
   return document.querySelectorAll('input[type="date"]');
+}
+
+const MEAL_TYPE_LABELS: Record<MealType, string> = {
+  breakfast: "Breakfast",
+  lunch: "Lunch",
+  dinner: "Dinner",
+  snack: "Snack",
+};
+
+// TODAY is fixed at noon (beforeEach) — the create-mode default (Meal-Type Edit Staleness
+// Fix, docs/prd/meal-type-edit-staleness.md) is whatever defaultMealType() resolves at that
+// hour, computed here rather than hardcoded so the assertions stay correct if the config's
+// hour boundaries ever change.
+const CREATE_DEFAULT_MEAL_TYPE = defaultMealType(12, DASHBOARD_CONFIG.mealType);
+const CREATE_DEFAULT_LABEL = MEAL_TYPE_LABELS[CREATE_DEFAULT_MEAL_TYPE];
+
+async function expectMealTypeChecked(label: string) {
+  await waitFor(() => {
+    expect((screen.getByRole("radio", { name: label }) as HTMLInputElement).checked).toBe(true);
+  });
 }
 
 // The calories field is required (native HTML constraint validation) — jsdom blocks form
@@ -230,5 +252,82 @@ describe("LogMealPanel", () => {
 
     expect(screen.queryByText("Stale today entry")).toBeNull();
     expect(await screen.findByText(`Meals · ${EARLIER}`)).toBeTruthy();
+  });
+
+  // Meal-Type Edit Staleness Fix (docs/prd/meal-type-edit-staleness.md), AC-M32–M35: the
+  // meal-type selector must show the edited entry's actual stored value, re-sync on every
+  // editEntry transition, leave create mode's own default untouched, and never leak an
+  // edited value back into create mode after Cancel/Save.
+
+  it("AC-M32: opening Edit on an entry shows its actual stored meal type, not the create-mode default", async () => {
+    expect(CREATE_DEFAULT_MEAL_TYPE).not.toBe("breakfast");
+    vi.mocked(actions.listMealEntriesForDate).mockResolvedValue([makeEntry({ mealType: "breakfast" })]);
+
+    render(<LogMealPanel />);
+    await expectMealTypeChecked(CREATE_DEFAULT_LABEL);
+
+    fireEvent.click(screen.getByText("Edit"));
+    expect(await screen.findByText("Edit meal")).toBeTruthy();
+    await expectMealTypeChecked("Breakfast");
+  });
+
+  it("AC-M33(a): cancelling an edit and opening Edit on a different entry re-syncs the selector", async () => {
+    const entryA = makeEntry({ id: 1, mealType: "lunch", description: "Sandwich" });
+    const entryB = makeEntry({ id: 2, mealType: "dinner", description: "Pasta" });
+    vi.mocked(actions.listMealEntriesForDate).mockResolvedValue([entryA, entryB]);
+
+    render(<LogMealPanel />);
+    expect(await screen.findByText(/Sandwich/)).toBeTruthy();
+
+    fireEvent.click(screen.getAllByText("Edit")[0]);
+    expect(await screen.findByText("Edit meal")).toBeTruthy();
+    await expectMealTypeChecked("Lunch");
+
+    fireEvent.click(screen.getByText("Cancel"));
+    await waitFor(() => expect(screen.queryByText("Edit meal")).toBeNull());
+
+    fireEvent.click(screen.getAllByText("Edit")[1]);
+    expect(await screen.findByText("Edit meal")).toBeTruthy();
+    await expectMealTypeChecked("Dinner");
+  });
+
+  it("AC-M33(b): clicking Edit on a different entry while one is still being edited re-syncs the selector", async () => {
+    const entryA = makeEntry({ id: 1, mealType: "lunch", description: "Sandwich" });
+    const entryB = makeEntry({ id: 2, mealType: "dinner", description: "Pasta" });
+    vi.mocked(actions.listMealEntriesForDate).mockResolvedValue([entryA, entryB]);
+
+    render(<LogMealPanel />);
+    expect(await screen.findByText(/Sandwich/)).toBeTruthy();
+
+    fireEvent.click(screen.getAllByText("Edit")[0]);
+    expect(await screen.findByText("Edit meal")).toBeTruthy();
+    await expectMealTypeChecked("Lunch");
+
+    // meal-entries-list.tsx applies no disabled/editing guard to other rows' Edit buttons,
+    // so clicking straight from A to B (without Cancel) is a reachable transition.
+    fireEvent.click(screen.getAllByText("Edit")[1]);
+    await expectMealTypeChecked("Dinner");
+  });
+
+  it("AC-M34: create mode's meal-type default is still computed from device-local time-of-day, unaffected by this fix", async () => {
+    render(<LogMealPanel />);
+    await expectMealTypeChecked(CREATE_DEFAULT_LABEL);
+  });
+
+  it("AC-M35: cancelling an edit does not leak the edited entry's meal type into create mode", async () => {
+    expect(CREATE_DEFAULT_MEAL_TYPE).not.toBe("dinner");
+    vi.mocked(actions.listMealEntriesForDate).mockResolvedValue([makeEntry({ mealType: "dinner" })]);
+
+    render(<LogMealPanel />);
+    await expectMealTypeChecked(CREATE_DEFAULT_LABEL);
+
+    fireEvent.click(screen.getByText("Edit"));
+    expect(await screen.findByText("Edit meal")).toBeTruthy();
+    await expectMealTypeChecked("Dinner");
+
+    fireEvent.click(screen.getByText("Cancel"));
+    await waitFor(() => expect(screen.queryByText("Edit meal")).toBeNull());
+
+    await expectMealTypeChecked(CREATE_DEFAULT_LABEL);
   });
 });
