@@ -50,5 +50,8 @@ Unified-schema conventions (verified against real ingested history, 2026-07-14):
 |---|---|---|
 | Production (`main`) | jerkai.app | `production` |
 | Preview (branches/PRs) | `*.vercel.app` preview URLs | `dev` |
+| Demo (`demo.jerkai.app`) | same Vercel project as Production, host-based rewrite (`next.config.ts`) to the `/demo` route subtree | none — reads only a committed synthetic fixture (`lib/demo/synthetic-data.ts`), never the database |
 
 Preview deployments never touch production data.
+
+The demo (`docs/prd/public-demo.md`) is a deliberately public, unauthenticated surface (`proxy.ts` excludes `/demo`), rendering the real dashboard UI over synthetic data only. It structurally cannot reach the database — the `/demo` route tree imports no DB-touching module, a property checked by `tests/unit/demo-isolation.test.ts`, not just configured. `jerkai.app/demo/weekly` and `/demo/daily` work without the custom domain; `demo.jerkai.app` additionally requires a one-time Vercel domain alias + DNS record (a manual step, not part of any deploy).
