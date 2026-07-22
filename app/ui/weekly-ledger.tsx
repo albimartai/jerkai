@@ -79,7 +79,7 @@ function WeekRowContent({ row }: { row: WeekRow }) {
   );
 }
 
-function WeekRowView({ row }: { row: WeekRow }) {
+function WeekRowView({ row, dailyBasePath }: { row: WeekRow; dailyBasePath: string }) {
   if (row.isGap) {
     return (
       <div
@@ -106,7 +106,7 @@ function WeekRowView({ row }: { row: WeekRow }) {
 
   return (
     <Link
-      href={`/daily?week=${row.weekStart}`}
+      href={`${dailyBasePath}?week=${row.weekStart}`}
       data-week-row="completed"
       className="block hover:bg-zinc-50 dark:hover:bg-zinc-900"
     >
@@ -118,13 +118,17 @@ function WeekRowView({ row }: { row: WeekRow }) {
 export default function WeeklyLedger({
   rows,
   completedWeeks,
+  navVariant = "live",
+  dailyBasePath = "/daily",
 }: {
   rows: WeekRow[];
   completedWeeks: number;
+  navVariant?: "live" | "demo";
+  dailyBasePath?: string;
 }) {
   return (
     <main className="mx-auto w-full max-w-3xl overflow-x-hidden px-4 pb-10 font-sans">
-      <NavHeader active="weekly" />
+      <NavHeader active="weekly" variant={navVariant} />
 
       {rows.length === 0 ? (
         <p className="py-24 text-center text-2xl text-zinc-500">No readings yet.</p>
@@ -155,7 +159,7 @@ export default function WeeklyLedger({
                 key={row.weekStart}
                 className="border-t border-zinc-200 first:border-t-0 dark:border-zinc-800"
               >
-                <WeekRowView row={row} />
+                <WeekRowView row={row} dailyBasePath={dailyBasePath} />
               </div>
             ))}
           </div>
