@@ -2,7 +2,7 @@
 // over/under target, not raw-dots-plus-trend-line — logged intake is a discrete daily
 // behavior where the daily value is the decision-relevant mark.
 
-import { resolveTargetForDate, type TargetRow } from "@/lib/targets";
+import { resolveTargetForDate, type TargetRow } from "@/lib/target-resolution";
 
 export type CalorieBarState = "over" | "under" | "neutral" | "gap";
 

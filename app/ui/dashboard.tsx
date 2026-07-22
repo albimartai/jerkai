@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import { NavHeader } from "@/app/ui/nav-header";
 import type { CalorieDay } from "@/lib/dashboard/calorie-strip";
 import { DASHBOARD_CONFIG } from "@/lib/dashboard/config";
-import type { DashboardData } from "@/lib/dashboard/data";
+import type { DashboardData } from "@/lib/dashboard/types";
 import { isoWeekEnd } from "@/lib/dashboard/iso-week";
 import { leanMassChange, recoveryReadout } from "@/lib/dashboard/readouts";
 import { rollingAverage } from "@/lib/dashboard/rolling";
@@ -410,6 +410,7 @@ export default function Dashboard({
   calorieSeries,
   initialWhoopOpen = false,
   focusWeekStart,
+  navVariant = "live",
 }: {
   data: DashboardData;
   // The calories strip's data (AC-M6), one entry per data.axis day — already resolved
@@ -425,6 +426,10 @@ export default function Dashboard({
   // When set, the visible window is positioned to contain that week instead
   // of trailing at the latest day.
   focusWeekStart?: string;
+  // "demo" (docs/prd/public-demo.md, AC-PD4) hides Targets/Log meal/Status
+  // from the shared header and points Weekly/Daily at /demo/*. Default "live"
+  // is today's unchanged behavior.
+  navVariant?: "live" | "demo";
 }) {
   const [windowDays, setWindowDays] = useState<WindowDays>(30);
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
@@ -541,7 +546,7 @@ export default function Dashboard({
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 pb-10 font-sans">
-      <NavHeader active="daily" />
+      <NavHeader active="daily" variant={navVariant} />
 
       {data.axis.length === 0 ? (
         <p className="py-24 text-center text-2xl text-zinc-500">No readings yet.</p>
