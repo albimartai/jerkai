@@ -22,6 +22,13 @@ import { auth } from "@/auth";
 //   - /privacy: public privacy policy (WHOOP's OAuth consent flow links to
 //     it, so it must render without a session). Excluded with `privacy$` —
 //     exact match only, so /privacy/* or any future /privacy-* stays gated.
+//   - /demo, /demo/*: the public demo surface (docs/prd/public-demo.md,
+//     AC-PD1) — renders the same dashboard UI over a committed synthetic
+//     fixture only. Never opens a DB connection or calls auth() (see
+//     tests/unit/demo-isolation.test.ts), so there is nothing to bypass;
+//     mirrors /privacy's static-only precedent. Excluded with `demo(?:$|/)`
+//     — exact-match discipline, so /demo and /demo/* open, but a
+//     hypothetical /demo-anything or /demography stays gated.
 //   - Next.js static assets and the favicon
 // Pages also re-check the session themselves (defense in depth) — see
 // app/page.tsx and app/status/page.tsx.
@@ -34,6 +41,6 @@ export default function proxy(request: NextRequest, event: NextFetchEvent) {
 
 export const config = {
   matcher: [
-    "/((?!api/ingest|api/auth|api/whoop/callback$|api/whoop/sync$|signin|privacy$|_next/static|_next/image|favicon.ico).*)",
+    "/((?!api/ingest|api/auth|api/whoop/callback$|api/whoop/sync$|signin|privacy$|demo(?:$|/)|_next/static|_next/image|favicon.ico).*)",
   ],
 };
