@@ -1,13 +1,23 @@
+import type { NextFetchEvent, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { describe, expect, it, vi } from "vitest";
 import type { BaseNextRequest } from "next/dist/server/base-http";
 import { tryToParsePath } from "next/dist/lib/try-to-parse-path";
 import { getMiddlewareRouteMatcher } from "next/dist/shared/lib/router/utils/middleware-route-matcher";
+// Next's own recommended pattern for testing a full proxy/middleware function
+// (node_modules/next/dist/docs/.../proxy.md, "The entire proxy function can
+// also be tested"): construct a real NextRequest and assert on the response
+// via isRewrite/getRewrittenUrl, rather than hand-inspecting a fake object.
+import { getRewrittenUrl, isRewrite } from "next/experimental/testing/server";
 
 // proxy.ts's default export drags in the whole Auth.js setup (which doesn't
-// resolve under vitest's node environment); only the matcher is under test.
-vi.mock("@/auth", () => ({ auth: () => undefined }));
+// resolve under vitest's node environment); auth() is mocked so both the
+// matcher (below) and the runtime host-bypass logic (bottom of this file)
+// can be exercised without it.
+const authMock = vi.fn(async () => new Response("auth-ran"));
+vi.mock("@/auth", () => ({ auth: authMock }));
 
-const { config } = await import("@/proxy");
+const { config, default: proxy } = await import("@/proxy");
 
 // Compile the real exported matcher exactly the way Next's build does
 // (path-to-regexp via tryToParsePath) and run it through the runtime
@@ -73,5 +83,88 @@ describe("proxy matcher", () => {
     // Next normalizes /privacy/ to /privacy before routing; if that ever
     // changes, the un-normalized path must land on the gate, not outside it.
     expect(gated("/privacy/")).toBe(true);
+  });
+});
+
+// The path-only matcher above cannot express "any path under this host is
+// public" — middleware evaluates its matcher against the request's ORIGINAL
+// incoming path, which for a demo.jerkai.app visitor is "/" (or "/weekly",
+// "/daily"), not "/demo/weekly", so those paths are NOT excluded by the
+// demo(?:$|/) pattern. proxy.ts instead checks the Host header at runtime
+// and rewrites directly into /demo/* for that host, regardless of path,
+// never reaching auth() — these tests exercise that runtime logic directly
+// via Next's own recommended isRewrite/getRewrittenUrl pattern (bug found
+// live: pre-fix, demo.jerkai.app/ 307'd to jerkai.app/signin because auth()
+// ran on the original "/" path before any rewrite could apply).
+// NextRequest built from a bare URL string does not auto-populate a `Host`
+// header (confirmed directly: proxy.ts's request.headers.get("host") read
+// nothing without this) — a real request always carries one, so set it
+// explicitly from the URL, matching what the request actually looks like
+// on the wire.
+function requestFor(url: string): NextRequest {
+  return new NextRequest(url, { headers: { host: new URL(url).host } });
+}
+const fakeEvent = {} as NextFetchEvent;
+
+// proxy()'s two branches return different types (NextResponse.rewrite() vs
+// the mocked auth()'s plain Response), so its inferred return type is a
+// union; isRewrite/getRewrittenUrl require NextResponse specifically. This
+// cast is compile-time only — isRewrite/getRewrittenUrl check response
+// headers at runtime, so they behave correctly (return false/null) on a
+// plain Response too, which is exactly what the "no rewrite" cases below
+// rely on.
+async function callProxy(url: string): Promise<NextResponse> {
+  return (await proxy(requestFor(url), fakeEvent)) as NextResponse;
+}
+
+describe("proxy host bypass for demo.jerkai.app", () => {
+  it("rewrites demo.jerkai.app/ to /demo/weekly without calling auth() (regression: used to 307 to jerkai.app/signin)", async () => {
+    authMock.mockClear();
+    const response = await callProxy("https://demo.jerkai.app/");
+    expect(authMock).not.toHaveBeenCalled();
+    expect(isRewrite(response)).toBe(true);
+    expect(getRewrittenUrl(response)).toBe("https://demo.jerkai.app/demo/weekly");
+  });
+
+  it("rewrites demo.jerkai.app/daily (with a query string) to /demo/daily, preserving the query", async () => {
+    authMock.mockClear();
+    const response = await callProxy("https://demo.jerkai.app/daily?week=2026-07-13");
+    expect(authMock).not.toHaveBeenCalled();
+    expect(isRewrite(response)).toBe(true);
+    expect(getRewrittenUrl(response)).toBe("https://demo.jerkai.app/demo/daily?week=2026-07-13");
+  });
+
+  it("still calls auth() (no rewrite) for the real jerkai.app host", async () => {
+    authMock.mockClear();
+    const response = await callProxy("https://jerkai.app/");
+    expect(authMock).toHaveBeenCalledOnce();
+    expect(isRewrite(response)).toBe(false);
+  });
+
+  it("still calls auth() (no rewrite) for a Vercel preview deployment host", async () => {
+    authMock.mockClear();
+    const response = await callProxy("https://jerkai-git-some-branch-albimartai817.vercel.app/");
+    expect(authMock).toHaveBeenCalledOnce();
+    expect(isRewrite(response)).toBe(false);
+  });
+
+  it("still calls auth() (no rewrite) for a lookalike host (not an exact match)", async () => {
+    authMock.mockClear();
+    let response = await callProxy("https://evildemo.jerkai.app/");
+    expect(authMock).toHaveBeenCalledOnce();
+    expect(isRewrite(response)).toBe(false);
+
+    authMock.mockClear();
+    response = await callProxy("https://demo.jerkai.app.evil.com/");
+    expect(authMock).toHaveBeenCalledOnce();
+    expect(isRewrite(response)).toBe(false);
+  });
+
+  it("rewrites for demo.jerkai.app with an explicit port (local/proxy testing)", async () => {
+    authMock.mockClear();
+    const response = await callProxy("http://demo.jerkai.app:3000/");
+    expect(authMock).not.toHaveBeenCalled();
+    expect(isRewrite(response)).toBe(true);
+    expect(getRewrittenUrl(response)).toBe("http://demo.jerkai.app:3000/demo/weekly");
   });
 });
