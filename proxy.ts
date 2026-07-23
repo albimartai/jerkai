@@ -1,3 +1,4 @@
+import { NextResponse } from "next/server";
 import type { NextFetchEvent, NextRequest } from "next/server";
 
 import { auth } from "@/auth";
@@ -32,7 +33,45 @@ import { auth } from "@/auth";
 //   - Next.js static assets and the favicon
 // Pages also re-check the session themselves (defense in depth) — see
 // app/page.tsx and app/status/page.tsx.
+//
+// The demo.jerkai.app HOST is handled entirely here, in proxy()'s body, not
+// via next.config.ts's rewrites — and not via a matcher exclusion either.
+// Per Next's own docs (node_modules/next/dist/docs/.../proxy.md,
+// "Execution order"), Proxy always runs BEFORE any next.config.js rewrite
+// (steps 3 vs 4/6/8), regardless of beforeFiles/afterFiles/fallback. A
+// visitor typing "demo.jerkai.app" requests path "/" (or "/weekly",
+// "/daily"), not "/demo/weekly" — that path doesn't match the demo(?:$|/)
+// matcher exclusion, so proxy() DOES run for it, and a next.config.ts
+// rewrite from "/" to "/demo/weekly" would never get a chance to fire
+// before auth() had already redirected the request. (Confirmed live, pre-fix:
+// demo.jerkai.app/demo/weekly worked; demo.jerkai.app/ 307'd to
+// jerkai.app/signin, because auth() ran on the original "/" path.)
+//
+// The fix: proxy() itself detects the host and issues the rewrite directly
+// via NextResponse.rewrite(), before ever considering auth() — deterministic,
+// no dependency on next.config.js rewrite ordering. This is the sole
+// mechanism that routes demo.jerkai.app; there is no longer a matching
+// rewrite in next.config.ts (removed — it could never fire once proxy()
+// itself rewrites the URL first, and having two competing rewrite paths for
+// the same host risked exactly this kind of ordering bug on the other one
+// too). Applying this to every path on the host (not just "/") is safe
+// because the destination is always the DB-free /demo subtree
+// (docs/prd/public-demo.md, NFR-51) — there is no other content reachable
+// there — and even if this logic ever regressed, the real page components
+// underneath still call auth() themselves as defense in depth (see the
+// comment above).
+const DEMO_HOST = "demo.jerkai.app";
+
+function isDemoHost(host: string): boolean {
+  return host === DEMO_HOST || host.startsWith(`${DEMO_HOST}:`);
+}
+
 export default function proxy(request: NextRequest, event: NextFetchEvent) {
+  if (isDemoHost(request.headers.get("host") ?? "")) {
+    const url = request.nextUrl.clone();
+    url.pathname = url.pathname === "/" ? "/demo/weekly" : `/demo${url.pathname}`;
+    return NextResponse.rewrite(url);
+  }
   // The auth config is lazily initialized (see auth.ts), which makes `auth`'s
   // TS overloads unavailable — but a (request, event) call is supported at
   // runtime and returns the middleware response.
