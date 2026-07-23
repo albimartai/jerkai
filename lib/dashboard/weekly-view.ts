@@ -1,5 +1,5 @@
 import { DASHBOARD_CONFIG } from "@/lib/dashboard/config";
-import type { DashboardData } from "@/lib/dashboard/data";
+import type { DashboardData } from "@/lib/dashboard/types";
 import { buildWeeklyLedger, completedWeekCount, type WeekRow } from "@/lib/dashboard/ledger";
 import { rollingAverage } from "@/lib/dashboard/rolling";
 import { stallBadge, type StallBadge } from "@/lib/dashboard/stall-badge";

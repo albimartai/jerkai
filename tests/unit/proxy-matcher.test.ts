@@ -36,6 +36,11 @@ describe("proxy matcher", () => {
     "/api/whoop/callback",
     "/api/whoop/sync",
     "/favicon.ico",
+    // /demo (docs/prd/public-demo.md, AC-PD1, NFR-49): the public demo
+    // surface — synthetic fixture data only, no auth() call, no DB import.
+    "/demo",
+    "/demo/weekly",
+    "/demo/daily",
   ])("leaves %s reachable without a session", (pathname) => {
     expect(gated(pathname)).toBe(false);
   });
@@ -55,6 +60,11 @@ describe("proxy matcher", () => {
     "/api/whoop/sync-anything",
     "/api/whoop",
     "/some/future/route",
+    // /demo is excluded with exact-match discipline (demo(?:$|/)) — a path
+    // that merely starts with the string "demo" but isn't the subtree must
+    // stay gated, same discipline as /privacy$.
+    "/demography",
+    "/demo-anything",
   ])("keeps %s behind the session gate", (pathname) => {
     expect(gated(pathname)).toBe(true);
   });

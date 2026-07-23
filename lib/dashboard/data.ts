@@ -1,7 +1,7 @@
 import { getSql } from "@/lib/db";
 import { readingDateKey } from "@/lib/dashboard/date-key";
 import { alignSeries, dayAxis } from "@/lib/dashboard/series";
-import { DAY_STRAIN_METRIC } from "@/lib/dashboard/strain";
+import { DASHBOARD_METRICS, type DashboardData, type DashboardMetricKey } from "@/lib/dashboard/types";
 
 // The dashboard's one read path: every strip's series, aligned onto one
 // shared day axis (NFR-2, AC-D8), fetched in a single query so a window
@@ -10,33 +10,12 @@ import { DAY_STRAIN_METRIC } from "@/lib/dashboard/strain";
 // semantics come for free: (source, metric, reading_date) is unique, so a
 // re-sent day is one row carrying its latest value (NFR-3).
 
-// The (source, metric) pairs the v1 dashboard renders. Day Strain is pinned
-// to the Whoop cycle metric, never the workout log (NFR-4).
-export const DASHBOARD_METRICS = {
-  bodyFatPct: { source: "fitdays", metric: "body_fat_pct" },
-  // v1.1: weight promoted to a main-stack strip (AC-N4, DL-2026-07-18-b) —
-  // already ingested via the Fitdays pipe, so this is a read-path add only
-  // (NFR-15).
-  weight: { source: "fitdays", metric: "weight" },
-  leanBodyMass: { source: "fitdays", metric: "lean_body_mass" },
-  dayStrain: DAY_STRAIN_METRIC,
-  recoveryScore: { source: "whoop", metric: "recovery_score" },
-  hrv: { source: "whoop", metric: "hrv" },
-  rhr: { source: "whoop", metric: "rhr" },
-  sleepDuration: { source: "whoop", metric: "sleep_duration" },
-} as const;
-
-export type DashboardMetricKey = keyof typeof DASHBOARD_METRICS;
-
-export type DashboardData = {
-  // Shared day axis, oldest first; empty when no dashboard metric has rows.
-  axis: string[];
-  // Per metric: one slot per axis day; null = genuine gap (AC-D13, NFR-8).
-  series: Record<DashboardMetricKey, (number | null)[]>;
-  // Unit as stored on the newest row in the window — read, never assumed.
-  units: Record<DashboardMetricKey, string | null>;
-  latestDay: string | null;
-};
+// DASHBOARD_METRICS/DashboardMetricKey/DashboardData live in
+// lib/dashboard/types.ts (no DB import) and are re-exported here so existing
+// importers of this module are unaffected; the demo route (docs/prd/public-demo.md)
+// imports them from lib/dashboard/types directly instead, so its module graph
+// never resolves this file's getSql import.
+export { DASHBOARD_METRICS, type DashboardData, type DashboardMetricKey };
 
 type Row = {
   source: string;
