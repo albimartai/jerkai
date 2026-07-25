@@ -45,7 +45,20 @@ export function NavHeader({
             </Link>
           );
         })}
-        {variant === "demo" ? null : (
+        {variant === "demo" ? (
+          // About (docs/prd/demo-about.md, AC-AB2, NFR-61) is demo-only: it
+          // explains the synthetic data and the deliberately absent write
+          // surfaces to a cold visitor, which the authenticated app has no
+          // reader for. It carries no active state — `active` is typed to the
+          // Weekly/Daily resolution pair, and widening it would change the
+          // shared live path too.
+          <Link
+            href="/demo/about"
+            className="ml-2 rounded-md px-2 py-1 text-sm text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-900"
+          >
+            About
+          </Link>
+        ) : (
           <>
             {/* Log Meal ships in this slice (AC-M13) — the CTA returns per AC-D14's own
                 terms. "+ Log workout" stays absent (its slice hasn't shipped). */}
