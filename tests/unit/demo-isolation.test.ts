@@ -1,3 +1,4 @@
+import fs from "fs";
 import path from "path";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
@@ -46,11 +47,30 @@ import { describe, expect, it } from "vitest";
 // comments.
 
 const ROOT = path.resolve(__dirname, "../..");
-const DEMO_ROOTS = [
-  path.join(ROOT, "app/demo/weekly/page.tsx"),
-  path.join(ROOT, "app/demo/daily/page.tsx"),
-  path.join(ROOT, "app/demo/layout.tsx"),
-];
+const DEMO_DIR = path.join(ROOT, "app/demo");
+
+// Enumerated from the filesystem rather than hardcoded (NFR-56,
+// docs/prd/demo-about.md): the roots used to be a literal list, so adding a
+// demo route without remembering to list it here left that route silently
+// unguarded — the failure mode is invisible precisely because the test still
+// passes. Every route-segment file under app/demo is a demo entry by
+// definition, so deriving the list makes future demo routes covered by
+// construction. The sanity check at the bottom of this file matters more
+// under this scheme than it did under the literal list: a typo in a hardcoded
+// path was a missing-file error, whereas a bad walk here would just return
+// [] and pass vacuously.
+function demoRoots(dir: string = DEMO_DIR): string[] {
+  return fs
+    .readdirSync(dir, { withFileTypes: true })
+    .flatMap((entry) => {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) return demoRoots(full);
+      return /^(page|layout)\.tsx$/.test(entry.name) ? [full] : [];
+    })
+    .sort();
+}
+
+const DEMO_ROOTS = demoRoots();
 
 const BANNED_PATH_SUBSTRINGS = ["lib/db.ts"];
 
@@ -107,6 +127,12 @@ function collectOwnImportSpecifiers(program: ts.Program): { specifier: string; f
 }
 
 describe("demo route isolation (AC-PD5, NFR-51)", () => {
+  it("roots the walk at every demo route segment, About included (AC-AB6, NFR-56)", () => {
+    const relative = DEMO_ROOTS.map((file) => path.relative(ROOT, file));
+    expect(relative).toContain("app/demo/about/page.tsx");
+    expect(relative).toEqual(expect.arrayContaining(["app/demo/layout.tsx"]));
+  });
+
   it("imports no DB-connecting module anywhere in its transitive graph", () => {
     const program = buildProgram(DEMO_ROOTS);
 
