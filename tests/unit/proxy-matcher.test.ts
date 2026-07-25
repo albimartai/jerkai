@@ -51,6 +51,11 @@ describe("proxy matcher", () => {
     "/demo",
     "/demo/weekly",
     "/demo/daily",
+    // AC-AB1 (docs/prd/demo-about.md): the About surface is a route inside
+    // the same /demo subtree, so it inherits this exclusion with no matcher
+    // edit (NFR-57) — this case is what proves that, rather than a reading
+    // of the regex.
+    "/demo/about",
   ])("leaves %s reachable without a session", (pathname) => {
     expect(gated(pathname)).toBe(false);
   });
@@ -132,6 +137,18 @@ describe("proxy host bypass for demo.jerkai.app", () => {
     expect(authMock).not.toHaveBeenCalled();
     expect(isRewrite(response)).toBe(true);
     expect(getRewrittenUrl(response)).toBe("https://demo.jerkai.app/demo/daily?week=2026-07-13");
+  });
+
+  it("rewrites demo.jerkai.app/about to /demo/about without calling auth() (AC-AB1, NFR-57)", async () => {
+    // The About surface is reached as demo.jerkai.app/about, so the host
+    // rewrite — not the path matcher — is what carries it to /demo/about.
+    // Asserted here rather than read off proxy.ts, per the standing rule
+    // that host routing is verified by test (DL-2026-07-23-a).
+    authMock.mockClear();
+    const response = await callProxy("https://demo.jerkai.app/about");
+    expect(authMock).not.toHaveBeenCalled();
+    expect(isRewrite(response)).toBe(true);
+    expect(getRewrittenUrl(response)).toBe("https://demo.jerkai.app/demo/about");
   });
 
   it("still calls auth() (no rewrite) for the real jerkai.app host", async () => {
