@@ -1,0 +1,16 @@
+title = "jerkai gitleaks config"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "postgres-connection-string"
+description = "Postgres/Neon connection string"
+regex = '''postgres(?:ql)?://[^\s'"]+:[^\s'"]+@[^\s'"]+'''
+tags = ["database", "credential"]
+
+[allowlist]
+description = "Non-secret fixtures and docs"
+paths = [
+  '''\.env\.example$''',
+]
