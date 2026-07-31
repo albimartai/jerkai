@@ -22,7 +22,7 @@ A commitlint `commit-msg` hook enforces the format locally; the gitleaks `pre-co
 - A feature slice must meet the **Definition of Ready** before work starts, and the **baseline Definition of Done** (plus its PRD's feature-specific DoD) before merge. Both live in [docs/definition-of-ready-and-done.md](docs/definition-of-ready-and-done.md) — the single source for the standard. PRDs and templates reference it and never restate it.
 - Use the issue templates (feature request includes the DoR gate; bug report captures repro steps).
 - Use the PR template: summary, linked issue, testing done, and the DoD checklist.
-- Merging to `main` requires a PR, green required status checks (`test`), a branch up to date with `main`, and linear history — so merge with squash or rebase, not a merge commit. No approving review is required (the ruleset sets zero).
+- Merging to `main` happens by PR; the ruleset refuses anything else. The current requirements are whatever `gh api repos/albimartai/jerkai/rulesets` prints — see [Repository rules for `main`](#repository-rules-for-main).
 
 ## CI
 
@@ -52,4 +52,10 @@ Never run migrations or tests against the Neon `production` branch from a dev ma
 
 ## Repository rules for `main`
 
-`main` is governed by a repository **ruleset** ("Protect main"), not classic branch protection and not settings applied via the GitHub CLI. It requires a PR, green required checks (`test`), a branch up to date with `main`, and linear history; it forbids direct pushes, force pushes and deletion. No approving review is required. See [docs/branch-protection.md](docs/branch-protection.md) for the live details and how to verify them.
+`main` is governed by a repository **ruleset**. Direct pushes and force pushes are refused. What exactly is enforced is read from GitHub, not from this file:
+
+```
+gh api repos/albimartai/jerkai/rulesets
+```
+
+In the UI: repo → Settings → Rules.
