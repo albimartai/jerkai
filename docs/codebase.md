@@ -266,21 +266,5 @@ not in either checkout, so its ids are read from source, tests and commit subjec
 (`docs/prd/demo-about.md`). In **jerkai-mcp** it is a separate lettered series,
 **NFR-A..NFR-D**, which does not continue jerkai's numbering and never will.
 
-**DOC** ids belong to docs-only sessions, which carry no PRD file in either repo. Unlike
-`AC-` and `NFR-`, which are **per-repo** (DL-2026-07-31-b), **DOC is one
-global ascending series across both `jerkai` and `jerkai-mcp`** — an id consumed in either
-repo is consumed for both, and neither repo restarts the count.
-
-Highest used: **DOC-66**. Allocation since DOC-35:
-
-| Ids | Session | Repo |
-|---|---|---|
-| DOC-29..DOC-35 | jerkai-mcp coupling re-sync | jerkai |
-| DOC-36..DOC-46 | Session J — agent context, repo standards, slice 1 PRD snapshot | jerkai-mcp |
-| DOC-47..DOC-58 | Session K — governance rails (commitlint, PR/issue templates, CODEOWNERS, branch-protection runbook) | jerkai-mcp |
-| DOC-59..DOC-66 | gitleaks config + rulesets/DOC-series doc corrections | jerkai |
-
-Session K's ids are **not** visible in `jerkai-mcp`'s `git log`: that PR was squash-merged
-with a rewritten subject that dropped them. Because squash merges can drop ids from commit
-subjects this way, **this table is the durable record of the DOC series** — `git log` is
-best-effort and will under-report.
+Docs-only sessions carry no PRD and no id series; they are identified by their commit
+subject and PR number. The `AC-` and `NFR-` series are unaffected and remain per-repo.
