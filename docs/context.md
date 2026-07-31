@@ -31,6 +31,16 @@ daily-streak logic (the badge's pre-Weekly-Ledger computation) survives only as 
 cold-start fallback while fewer than 2 completed weeks exist. The badge is still passive —
 it never asserts a cause, on either surface.
 
+**A third surface lives outside this repo: `jerkai-mcp`** (shipped 2026-07-29), a local,
+read-only Model Context Protocol server over the same metric registry, built and shipped
+independently with its own slices continuing there. It lets an MCP-connected chat client ask
+about JerkAI's data; today it answers which biometric axes are queryable and from which
+source, and nothing more — it holds no credential, opens no database connection, and reports
+coverage as null rather than guessing. Its boundary statements are part of the product, not
+disclaimers: it must state that it has no nutrition or energy-balance data, and that
+co-movement between metrics states no cause. That is the same passive-badge principle the
+dashboard follows.
+
 ## v1.1 dashboard (direction 1c) — the `/daily` drill-down surface
 Stacked strips on one shared date axis; hover scrubs a crosshair across all strips to the
 same day. One rendering rule everywhere: raw daily values are low-emphasis dots and the
