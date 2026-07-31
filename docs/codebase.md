@@ -7,7 +7,7 @@ cite a fact instead of re-deriving it. It covers modules, data flow, conventions
 It deliberately does not cover product intent (`docs/context.md`), schema DDL or local setup
 (`README.md`), or process (`docs/definition-of-ready-and-done.md`).
 
-**Derived at:** commit `d06678b6d17d7f116367d4453a1e752caf23fdb9`, 2026-07-28.
+**Derived at:** commit `26b3d069ab17f84e682dea074f8f4ecb12b3c2ef`, 2026-07-31.
 
 **Staleness rule.** This is a snapshot of a moving target. A PRD citing it must re-verify
 the specific claims it leans on. Where a claim disagrees with the code, **the file is wrong
@@ -59,14 +59,14 @@ means a colocated `lib/**/*.test.ts`; tests living under `tests/` are named inst
 
 | Module | Purpose | Pure | Internal imports | Test |
 |---|---|---|---|---|
-| `types.ts` | `DASHBOARD_METRICS` (the 8 rendered source/metric pairs), `DashboardData` | yes | `strain` | none |
+| `types.ts` | `DASHBOARD_METRICS` (the 8 rendered source/metric pairs), `DashboardData`; **vendored downstream by `jerkai-mcp` under a byte-equality lock** (§6) | yes | `strain` | none |
 | `config.ts` | `DASHBOARD_CONFIG` — every tuning constant, typed | yes | `meal-type` | none |
 | `data.ts` | `fetchDashboardData(windowDays)` — the one dashboard read query | no | `db`, `date-key`, `series`, `types` | `tests/integration/dashboard-read.test.ts` |
 | `date-key.ts` | `readingDateKey` — read-side date guard; **throws** on a non-local-day format | yes | — | yes |
 | `series.ts` | `addDays`, `dayAxis`, `alignSeries` — shared axis and null-gap alignment | yes | — | yes |
 | `rolling.ts` | `rollingAverage(values, window)` — trailing mean over present days only | yes | — | yes |
 | `units.ts` | `toPounds(value, unit)` — converts only `kg`, else passes through | yes | — | yes |
-| `strain.ts` | `STRAIN_DOMAIN` 0–21 fixed, `DAY_STRAIN_METRIC`, `strainFraction` (clamps) | yes | — | yes |
+| `strain.ts` | `STRAIN_DOMAIN` 0–21 fixed, `DAY_STRAIN_METRIC`, `strainFraction` (clamps); **vendored downstream by `jerkai-mcp` under a byte-equality lock** (§6) | yes | — | yes |
 | `iso-week.ts` | `isoWeekStart`/`isoWeekEnd` (Mon–Sun) | yes | `series` | yes |
 | `ledger.ts` | `buildWeeklyLedger`, `completedWeekCount` — weekly rows, cells, states | yes | `config`, `iso-week`, `series` | yes |
 | `weekly-badge.ts` | `weeklyStallBadge(rows, fallback)` — hero badge from completed ledger rows | yes | `ledger`, `stall-badge` | yes |
@@ -221,21 +221,51 @@ The `demo.jerkai.app` host rewrite happens **inside** `proxy()`'s body, before `
 `app/log-meal/actions.ts` fails at runtime, not at build; that is why
 `app/log-meal/action-state.ts` exists.
 
+**`lib/dashboard/types.ts` and `strain.ts` have an out-of-repo consumer, and its drift
+check will not catch you.** *Assumption:* these are internal modules, free to refactor like
+any other `lib/dashboard/` file — and, for anyone who has heard there is a drift check
+somewhere, that the check will fail if that is wrong. *Reality:* the sibling repo
+`jerkai-mcp` (shipped 2026-07-29) carries byte-pinned copies at `src/vendor/types.ts` and
+`src/vendor/strain.ts`, each behind a four-line `//` provenance header
+(`vendor.lock.json#headerLines` is `4`), and derives its whole metric registry from them at
+import time. Its `scripts/check-vendor-drift.mjs` strips that header and compares the copy
+against the upstream bytes **at the commit SHA recorded in `vendor.lock.json`** — it resolves
+them with `git show <locked-sha>:<path>` against a local jerkai checkout (`JERKAI_REPO`,
+default `../jerkai`) — **not** against this repo's current `main`. The `Vendor drift`
+workflow runs that same script on `push` to `main`, on `pull_request`, on a weekly `schedule`
+(cron `0 6 * * 1`) and on `workflow_dispatch`. *Consequence:* it is the reverse of what the
+setup suggests. Editing `lib/dashboard/types.ts` or `strain.ts` on this repo's `main` fails
+nothing, anywhere. The drift check keeps passing, because the commit it reads is immutable
+and its contents can never change. What happens instead is that `jerkai-mcp` goes on serving
+a stale metric registry indefinitely, with a green CI badge. The check detects local
+tampering with the vendored copies; it does not detect upstream change, and cannot. Nothing
+in either repo notices an edit to the registry here — picking one up is a deliberate human
+step in that repo: re-copy both files, bump `sha` in `vendor.lock.json`, re-run the check.
+(The lock currently names `26b3d069ab17f84e682dea074f8f4ecb12b3c2ef`, the same commit this
+file is pinned to, so the two are in sync as of this snapshot — which is exactly the state
+that stops being true silently.)
+
 ## 7. Id series in use
 
-Derived from `docs/prd/` and `docs/prd/archive/` at the pinned commit.
+Derived from `docs/prd/` and `docs/prd/archive/` at the pinned commit. Series belonging to
+the sibling repo `jerkai-mcp` are derived from that repo instead; its PRDs live in the vault,
+not in either checkout, so its ids are read from source, tests and commit subjects there.
 
-| Prefix | Highest used | Introduced by |
-|---|---|---|
-| `AC-D` | 17 | v1 / v1.1 dashboard |
-| `AC-N` | 14 | v1.1 dashboard |
-| `AC-W` | 12 | Weekly Ledger |
-| `AC-M` | 35 | Log Meal and its fast-follows |
-| `AC-PD` | 7 | Public Demo |
-| `AC-AB` | 9 | Demo About |
+| Prefix | Repo | Highest used | Introduced by |
+|---|---|---|---|
+| `AC-D` | jerkai | 17 | v1 / v1.1 dashboard |
+| `AC-N` | jerkai | 14 | v1.1 dashboard |
+| `AC-W` | jerkai | 12 | Weekly Ledger |
+| `AC-M` | jerkai | 35 | Log Meal and its fast-follows |
+| `AC-PD` | jerkai | 7 | Public Demo |
+| `AC-AB` | jerkai | 9 | Demo About |
+| `AC-MF` | jerkai-mcp | 9 | MCP metric registry, slice 1 (`AC-MF9`, the vendor drift check) |
 
-**NFR** is one global ascending series across all PRDs, not per-slice: high-water mark
-**NFR-62** (`docs/prd/demo-about.md`).
+**NFR** is one ascending series **per repo**, not per-slice and not global across repos
+(DL-2026-07-31-a). In **jerkai** it is numeric, high-water mark **NFR-62**
+(`docs/prd/demo-about.md`). In **jerkai-mcp** it is a separate lettered series,
+**NFR-A..NFR-D**, which does not continue jerkai's numbering and never will.
 
-**DOC** ids belong to docs-only sessions, which carry no PRD file in the repo; they appear
-only in commit subjects. Highest used: **DOC-22** (`git log`, PR #18).
+**DOC** ids belong to docs-only sessions, which carry no PRD file in either repo; they
+appear only in commit subjects, never in a docs file. Highest used: **DOC-35** (`git log`,
+this session — the jerkai-mcp coupling re-sync, which allocated DOC-29..DOC-35).
