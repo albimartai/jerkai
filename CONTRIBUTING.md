@@ -5,7 +5,7 @@ JerkAI is a single-user project built in public. This doc records the workflow s
 ## Branching model — trunk-based
 
 - `main` is always deployable. It is the Vercel Production deployment (jerkai.app) and is backed by the Neon `production` branch.
-- All work happens on short-lived feature branches cut from `main`, merged back via PR. No direct pushes to `main` (enforced by branch protection).
+- All work happens on short-lived feature branches cut from `main`, merged back via PR. No direct pushes to `main` (enforced by the "Protect main" repository ruleset).
 - Every non-`main` branch gets a Vercel Preview deployment backed by the Neon `dev` branch. Preview deployments never touch production data.
 - Branch names: `<type>/<short-slug>`, e.g. `feat/dashboard-strips`, `fix/step-count-merge`, `docs/project-rails`.
 
@@ -22,7 +22,7 @@ A commitlint `commit-msg` hook enforces the format locally; the gitleaks `pre-co
 - A feature slice must meet the **Definition of Ready** before work starts, and the **baseline Definition of Done** (plus its PRD's feature-specific DoD) before merge. Both live in [docs/definition-of-ready-and-done.md](docs/definition-of-ready-and-done.md) — the single source for the standard. PRDs and templates reference it and never restate it.
 - Use the issue templates (feature request includes the DoR gate; bug report captures repro steps).
 - Use the PR template: summary, linked issue, testing done, and the DoD checklist.
-- PRs merge only with green CI and review (branch protection).
+- Merging to `main` requires a PR, green required status checks (`test`), a branch up to date with `main`, and linear history — so merge with squash or rebase, not a merge commit. No approving review is required (the ruleset sets zero).
 
 ## CI
 
@@ -47,8 +47,9 @@ Never run migrations or tests against the Neon `production` branch from a dev ma
 ## Secret hygiene
 
 - `.env.local` is gitignored and must stay that way. Never commit a secret of any kind.
-- The gitleaks pre-commit hook (requires `brew install gitleaks`) and GitHub secret scanning are both active — keep them working.
+- The gitleaks pre-commit hook (requires `brew install gitleaks`) is active — keep it working. It reads `.gitleaks.toml`, which extends gitleaks' default ruleset and adds a custom `postgres-connection-string` rule so the Postgres/Neon connection strings this repo handles are caught before they can be committed. `.env.example` is allowlisted as a non-secret fixture.
+- On GitHub, **secret scanning** and **push protection** are both enabled. **Non-provider pattern scanning is not enabled**, and is unavailable to a repo owned by a personal account — GitHub will not match a generic Postgres URL for us. That gap is exactly why the local custom rule above exists.
 
-## Branch protection
+## Repository rules for `main`
 
-`main` requires: PR with review, passing CI, branch up to date, no direct pushes. Settings are applied via the GitHub CLI — see [docs/branch-protection.md](docs/branch-protection.md) for the exact commands.
+`main` is governed by a repository **ruleset** ("Protect main"), not classic branch protection and not settings applied via the GitHub CLI. It requires a PR, green required checks (`test`), a branch up to date with `main`, and linear history; it forbids direct pushes, force pushes and deletion. No approving review is required. See [docs/branch-protection.md](docs/branch-protection.md) for the live details and how to verify them.
