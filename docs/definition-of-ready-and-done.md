@@ -50,6 +50,7 @@ A slice is done only when all of these are true, **in addition to** the feature-
 - [ ] **Shared date key** — dated data normalized to the device-local calendar day where the slice touches it.
 - [ ] **Raw-data-preserved** — raw values shown/stored; trends/derivations computed at render time, never overwriting raw records.
 - [ ] **Secret hygiene intact** — no secrets committed; gitleaks pre-commit + GitHub secret scanning passing.
+- [ ] Repo PRD snapshot landed. The PRD's repo-side copy is written to `docs/prd/[kebab].md` in the same PR that ships the slice — the import-drop item below presupposes this already happened. A PR that drops the `CLAUDE.md` import without ever landing the file leaves `docs/prd/` silently pointing at whichever slice shipped last.
 - [ ] **Merged via PR** (not direct to `main`), with the DoD checklist completed in the PR.
 - [ ] **PRD import dropped from `CLAUDE.md` in the same PR.** A Build PRD is imported into `CLAUDE.md` only while its slice is being built; once the slice ships, the shipping PR removes that import. The PRD file stays where it is and remains reachable through the citing PRD's §1 "Required reading" — this drops automatic loading, not availability. `CLAUDE.md` imports durable, every-session context only (`AGENTS.md`, `docs/context.md`, `docs/definition-of-ready-and-done.md`). Added after the import list accumulated five shipped PRDs, so every session loaded completed requirements as live context and could not tell what was still in force (DL-2026-07-26-b, PR #17).
 - [ ] **Product-truth reconciliation flagged.** Any material change to product facts — scope, north-star / driver metrics, or a decision — surfaced during the slice is called out in the PR summary for reconciliation into [[JerkAI - Product Brief]] and [[JerkAI - Decision Log]]. This flag is the build session's responsibility; the vault edits themselves are a PM step, **not** performed by the build agent. "PM step" means the PM side of the repo/vault boundary — a Cowork session with the vault mounted, which may author the entry once Albert has confirmed the decision (see "Authoring vs. deciding" below). It does not mean Albert types it. When the Brief changes, re-snapshot `docs/context.md` into the repo so the repo's product context doesn't drift from the vault.
@@ -58,13 +59,13 @@ A slice is done only when all of these are true, **in addition to** the feature-
 
 Added 2026-07-26 (DL-2026-07-26-a).
 
-**Deciding is Albert's** and is not delegable. Every Decision Log entry records his confirmed judgment. An agent that infers a decision from discussion and logs it has fabricated product truth.
+**Deciding is Albert's and is not delegable.** Every Decision Log entry records his confirmed judgment. An agent that infers a decision from discussion and logs it has fabricated product truth.
 
-**Authoring is mechanical** and is delegated. Once Albert has confirmed a decision, a Cowork PM-side session allocates the `DL-YYYY-MM-DD-x` id, writes the entry in house format, propagates it to the vault docs named in Affects, and reports which repo snapshots need re-syncing. Albert reviews the drafted entry before it is appended, and reviews wording only — the mechanics are already handled.
+**Authoring is mechanical and is delegated.** Once Albert has confirmed a decision, a Cowork PM-side session allocates the `DL-YYYY-MM-DD-x` id, writes the entry in house format, propagates it to the vault docs named in **Affects**, and reports which repo snapshots need re-syncing. Albert reviews the drafted entry before it is appended, and reviews wording only — the mechanics are already handled.
 
 **The build agent's rule is unchanged.** A repo-scoped Claude Code session still flags only and never writes to the vault (DL-2026-07-17-a). That constraint is about a coding agent crossing the boundary, not about who may hold a pen on the PM side.
 
-**Three properties make delegated authoring safe.** The log is append-only, so the worst failure is a visibly wrong new entry rather than corrupted history; reversals are new entries carrying Supersedes, never edits; and the entry format is rigid enough to check mechanically. The vault is not version-controlled, which is why the draft-then-approve gate exists.
+**Three properties make delegated authoring safe.** The log is append-only, so the worst failure is a visibly wrong new entry rather than corrupted history; reversals are new entries carrying **Supersedes**, never edits; and the entry format is rigid enough to check mechanically. The vault is *not* version-controlled, which is why the draft-then-approve gate exists.
 
 ## How PRDs use this
 

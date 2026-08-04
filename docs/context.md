@@ -15,6 +15,18 @@ North star: **body fat % trend** (7-day and 30-day rolling average) as the decis
 - **Training** — *driver* — **Whoop Day Strain (Cycle Strain, 0–21)**, from the Whoop API. NOT workout-log tonnage (tonnage is permanently not a dashboard metric).
 - **Recovery Score** — *guardrail* — Whoop's own Recovery Score, via the direct Whoop API. Surfaced as a guardrail readout plus a strip inside the collapsible Whoop detail, not a main-stack strip (decision DL-2026-07-18-a).
 - **Lean body mass** — *guardrail* — from Fitdays via Apple Health. Surfaced as a main-stack strip plus a 30-day-change readout.
+- **HRV** — *guardrail* — from the Whoop API. Surfaced inside the collapsible Whoop
+  detail (DL-2026-08-03-a2).
+- **RHR** — *guardrail* — from the Whoop API. Surfaced inside the collapsible Whoop
+  detail (DL-2026-08-03-a2).
+
+A fourth role, **tracked**, names a metric that is ingested and shown but is
+deliberately outside the driver tree (DL-2026-08-03-a1):
+
+- **Weight** — *tracked* — from Fitdays via Apple Health. Shown as a main-stack strip
+  (decision DL-2026-07-18-b), formalized to `tracked` DL-2026-08-03-a2.
+- **Sleep duration** — *tracked* — from the Whoop API. Surfaced inside the collapsible
+  Whoop detail.
 
 ## Surfaces & routes (Weekly Ledger, DL-2026-07-19-a)
 Two resolutions, one nav: **`/weekly`** (the Weekly Ledger) is the default landing page —
@@ -34,12 +46,14 @@ it never asserts a cause, on either surface.
 **A third surface lives outside this repo: `jerkai-mcp`** (shipped 2026-07-29), a local,
 read-only Model Context Protocol server over the same metric registry, built and shipped
 independently with its own slices continuing there. It lets an MCP-connected chat client ask
-about JerkAI's data; today it answers which biometric axes are queryable and from which
-source, and nothing more — it holds no credential, opens no database connection, and reports
-coverage as null rather than guessing. Its boundary statements are part of the product, not
-disclaimers: it must state that it has no nutrition or energy-balance data, and that
-co-movement between metrics states no cause. That is the same passive-badge principle the
-dashboard follows.
+about JerkAI's data. Two tools are shipped so far: `list_available_metrics` answers which
+biometric axes are queryable and from which source; `describe_metric` (2026-08-03) answers,
+per axis, where it sits in the driver tree above and whether it is measured or
+vendor-computed. Neither reports coverage — it holds no credential, opens no database
+connection, and reports coverage as null rather than guessing. Its boundary statements are
+part of the product, not disclaimers: it must state that it has no nutrition or
+energy-balance data, and that co-movement between metrics states no cause. That is the same
+passive-badge principle the dashboard follows.
 
 ## v1.1 dashboard (direction 1c) — the `/daily` drill-down surface
 Stacked strips on one shared date axis; hover scrubs a crosshair across all strips to the
@@ -56,8 +70,8 @@ hero stall badge shown here is the same one described above.
   readout (7-day average + red-zone-day count) and as a full strip inside the collapsible
   Whoop detail. Demoted from the v1 main stack (decision DL-2026-07-18-a).
 - **Weight is a main-stack strip** (Fitdays, already ingested), added below body fat
-  (decision DL-2026-07-18-b). It is a strip in its own right, not a north-star/driver/
-  guardrail metric.
+  (decision DL-2026-07-18-b). It carries the `tracked` role (DL-2026-08-03-a1/-a2) — a
+  strip in its own right, not a north-star/driver/guardrail metric.
 - **Calories-vs-target strip** (Log Meal, `docs/prd/archive/log-meal.md`): daily bars colored
   over/under that day's effective target, not the dots+trend treatment — logged intake is a
   discrete daily behavior where the daily value is the decision-relevant mark
