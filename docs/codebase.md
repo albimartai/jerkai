@@ -47,7 +47,7 @@ means a colocated `lib/**/*.test.ts`; tests living under `tests/` are named inst
 | `whoop-crypto.ts` | `encryptToken`/`decryptToken`, AES-256-GCM, `v1.<iv>.<tag>.<ct>` | no | — | `tests/unit/whoop-crypto.test.ts` |
 | `whoop-oauth.ts` | OAuth flow + token persistence; `getFreshAccessToken` refreshes within 60s of expiry | no | `db`, `whoop-crypto` | `tests/unit/whoop-oauth.test.ts` |
 | `whoop-map.ts` | Whoop records → readings/workout rows: `mapWhoopData`, `mapWhoopWorkouts`, `localDay` | yes | `whoop-api` (types) | yes |
-| `auth-callbacks.ts` | `authorized` (drives `proxy.ts`), `signIn` (single-email allowlist, fails closed) | no | — | yes |
+| `auth-callbacks.ts` | `authorized` (drives `proxy.ts`), `signIn` (multi-email allowlist via `ALLOWLISTED_EMAILS`, fails closed) | no | — | yes |
 | `targets.ts` | `saveTarget`, `fetchTargets`; re-exports `resolveTargetForDate` | no | `db`, `target-resolution` | yes |
 | `target-resolution.ts` | `resolveTargetForDate` — the one answer to "which target governed day X" | yes | — | via `targets.test.ts` |
 | `target-validation.ts` | `validateTargetInput` — Server Action boundary, rejects rather than coerces | yes | — | yes |
