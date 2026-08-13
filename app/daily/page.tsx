@@ -32,14 +32,15 @@ export default async function Daily({
     redirect("/signin");
   }
 
-  const data = await fetchDashboardData(MAX_WINDOW_DAYS);
+  const userId = Number(session.user.id);
+  const data = await fetchDashboardData(MAX_WINDOW_DAYS, userId);
   const { week } = await searchParams;
 
   // Sibling read path (the calories strip's data comes from manual_macro_entries /
   // daily_targets, not biometric_readings) — same axis as the strip stack, each day
   // resolved against its own effective target (NFR-30, DL-pending-3).
-  const targets = await fetchTargets();
-  const calorieSeries = await fetchCalorieSeries(data.axis, targets);
+  const targets = await fetchTargets(userId);
+  const calorieSeries = await fetchCalorieSeries(data.axis, targets, userId);
 
   return <Dashboard data={data} calorieSeries={calorieSeries} focusWeekStart={week} />;
 }

@@ -62,16 +62,21 @@ export async function logMealAction(
     return { ...initialLogMealState, status: "error", errors: validated.errors };
   }
 
+  const userId = Number(session.user.id);
+
   // ON CONFLICT DO NOTHING (NFR-29): a retried/double-tapped submit with the same key
   // affects zero rows here — that is a successful save from the original attempt, not a
   // failure, so the response below is identical either way.
-  await saveMealEntry({ ...validated.value, idempotencyKey });
+  await saveMealEntry({ ...validated.value, userId, idempotencyKey });
 
   revalidatePath("/log-meal");
   revalidatePath("/daily");
 
   const { entryDate } = validated.value;
-  const [entries, targets] = await Promise.all([fetchMealEntriesForDate(entryDate), fetchTargets()]);
+  const [entries, targets] = await Promise.all([
+    fetchMealEntriesForDate(entryDate, userId),
+    fetchTargets(userId),
+  ]);
 
   return {
     status: "success",
@@ -119,9 +124,13 @@ export async function updateMealEntryAction(
     return { ...initialEditMealState, status: "error", errors: validated.errors };
   }
 
+  const userId = Number(session.user.id);
+
   // AC-M18: same row, in place (id preserved, never delete-and-re-add). NFR-34: an id
   // that doesn't resolve to a row fails closed rather than silently no-oping as success.
-  const result = await updateMealEntry({ id, ...validated.value });
+  // AC-MU5: scoped by id AND userId — another user's id is indistinguishable from
+  // an id that never existed.
+  const result = await updateMealEntry({ id, userId, ...validated.value });
   if (!result.ok) {
     return { ...initialEditMealState, status: "error", errors: ["entry not found"] };
   }
@@ -134,7 +143,10 @@ export async function updateMealEntryAction(
   // totals/target returned here are for the (possibly new) entry date, matching
   // logMealAction's shape for the on-page running total.
   const { entryDate } = validated.value;
-  const [entries, targets] = await Promise.all([fetchMealEntriesForDate(entryDate), fetchTargets()]);
+  const [entries, targets] = await Promise.all([
+    fetchMealEntriesForDate(entryDate, userId),
+    fetchTargets(userId),
+  ]);
 
   return {
     status: "success",
@@ -162,8 +174,8 @@ export async function deleteMealEntryAction(
 
   // AC-M21/NFR-37: hard delete is idempotent — a row that's already gone (e.g. deleted in
   // another tab) is still a successful outcome from the caller's point of view, never an
-  // error or a 500.
-  await deleteMealEntry(id);
+  // error or a 500. AC-MU5: scoped by id AND userId.
+  await deleteMealEntry(id, Number(session.user.id));
 
   revalidatePath("/log-meal");
   revalidatePath("/daily");
@@ -178,5 +190,5 @@ export async function deleteMealEntryAction(
 export async function listMealEntriesForDate(entryDate: string): Promise<MealEntryRow[]> {
   const session = await auth();
   if (!session) return [];
-  return fetchMealEntriesForDate(entryDate);
+  return fetchMealEntriesForDate(entryDate, Number(session.user.id));
 }
