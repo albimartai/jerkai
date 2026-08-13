@@ -79,7 +79,13 @@ async function syncRuns() {
   `;
 }
 
-beforeAll(() => {
+// This pipe has no session (machine-to-machine), so it attributes every row via
+// PRIMARY_USER_EMAIL resolution (NFR-71) — one fixed test user backs every pre-existing
+// test in this file that isn't itself exercising attribution (that's the AC-MU10 block below,
+// which stubs its own PRIMARY_USER_EMAIL values and manages its own users rows).
+const PRIMARY_EMAIL = "ingest-test-primary@example.com";
+
+beforeAll(async () => {
   if (!DATABASE_URL) {
     throw new Error(
       "DATABASE_URL is not set. Integration tests need a disposable Neon branch — see scripts/ci/neon-branch.mjs.",
@@ -92,6 +98,15 @@ beforeAll(() => {
     );
   }
   vi.stubEnv("HEALTH_EXPORT_SHARED_SECRET", SECRET);
+  vi.stubEnv("PRIMARY_USER_EMAIL", PRIMARY_EMAIL);
+  // user_id has no ON DELETE cascade (OQ-3) — every child table is cleared defensively before
+  // users, since these tables are shared across the whole test run (fileParallelism: false)
+  // and a stray row from another integration file would otherwise block this delete.
+  await sql`delete from biometric_readings`;
+  await sql`delete from manual_macro_entries`;
+  await sql`delete from daily_targets`;
+  await sql`delete from users`;
+  await sql`insert into users (email) values (${PRIMARY_EMAIL})`;
 });
 
 beforeEach(async () => {
@@ -301,5 +316,58 @@ describe("POST /api/ingest/health — partial success", () => {
       { source: "fitdays", metric: "weight", value: "180.2" },
     ]);
     expect(sendSyncFailureAlert).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * AUTO-GENERATED TEST STUB — JerkAI Contract
+ * PRD Target: JerkAI — Build PRD: Multi-User Data Model Retrofit
+ *
+ * DO NOT EDIT test names, AC IDs, or stub assertions during implementation.
+ * Implementation code must be written to satisfy these stubs.
+ * Editing stubs to fit implementation triggers a blocking finding in jerkai-falsify-diff.
+ */
+describe("POST /api/ingest/health — AC-MU10: attribution via PRIMARY_USER_EMAIL", () => {
+  const PRIMARY_EMAIL = "primary-mu10@example.com";
+
+  afterEach(async () => {
+    // The happy-path case below lands real rows via POST, tied to the user it creates —
+    // user_id has no ON DELETE cascade (OQ-3), so biometric_readings must clear first.
+    await sql`delete from biometric_readings`;
+    await sql`delete from users`;
+  });
+
+  it("AC-MU10: every landed row is attributed to the user resolved by looking up PRIMARY_USER_EMAIL in users, never a hardcoded id", async () => {
+    await sql`delete from users`;
+    const [user] = await sql`insert into users (email) values (${PRIMARY_EMAIL}) returning id`;
+    vi.stubEnv("PRIMARY_USER_EMAIL", PRIMARY_EMAIL);
+
+    const res = await POST(ingestRequest(JSON.stringify(fullPayload), SECRET));
+    expect(res.status).toBe(200);
+
+    const rows = await sql`select distinct user_id from biometric_readings`;
+    expect(rows).toEqual([{ user_id: user.id }]);
+  });
+
+  it("AC-MU10: fails closed (no rows written) when PRIMARY_USER_EMAIL resolves to zero users", async () => {
+    await sql`delete from users`;
+    vi.stubEnv("PRIMARY_USER_EMAIL", "nobody-mu10@example.com");
+
+    const res = await POST(ingestRequest(JSON.stringify(fullPayload), SECRET));
+
+    expect(res.status).not.toBe(200);
+    expect(await readingRows()).toEqual([]);
+  });
+
+  it("AC-MU10: fails closed (no rows written) when PRIMARY_USER_EMAIL resolves to more than one user", async () => {
+    await sql`delete from users`;
+    await sql`insert into users (email) values (${PRIMARY_EMAIL})`;
+    await sql`insert into users (email) values (${PRIMARY_EMAIL})`;
+    vi.stubEnv("PRIMARY_USER_EMAIL", PRIMARY_EMAIL);
+
+    const res = await POST(ingestRequest(JSON.stringify(fullPayload), SECRET));
+
+    expect(res.status).not.toBe(200);
+    expect(await readingRows()).toEqual([]);
   });
 });

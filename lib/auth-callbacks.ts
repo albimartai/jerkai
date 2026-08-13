@@ -30,3 +30,23 @@ export function signIn({ user }: { user: { email?: string | null } }): boolean {
   }
   return allowed.includes(user.email?.trim().toLowerCase() ?? "");
 }
+
+type SessionUser = { name?: string | null; email?: string | null; image?: string | null };
+type BareSession = { user: SessionUser; expires: string };
+
+/**
+ * Auth.js's default session assembly strips everything but name/email/image
+ * from session.user. The JWT's sub claim already carries the adapter's real
+ * users.id (set by @auth/core's default jwt callback for the email provider
+ * this app uses, confirmed against node_modules/@auth/core/lib/actions/callback/index.js) —
+ * this callback is the one place that restores it onto session.user.id.
+ */
+export function session({ session, token }: { session: BareSession; token: { sub?: string } }) {
+  return {
+    ...session,
+    user: {
+      ...session.user,
+      id: token.sub ?? "",
+    },
+  };
+}

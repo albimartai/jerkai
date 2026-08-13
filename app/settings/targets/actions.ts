@@ -36,7 +36,7 @@ export async function saveTargetAction(
 
   // Insert-only (DL-pending-3): this never updates an existing row, so a day's history
   // before the new effective date can never recolor.
-  await saveTarget(validated.value);
+  await saveTarget({ ...validated.value, userId: Number(session.user.id) });
 
   revalidatePath("/settings/targets");
   revalidatePath("/log-meal");

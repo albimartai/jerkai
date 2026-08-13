@@ -7,6 +7,7 @@ import {
   type HealthExportPayload,
   type HealthExportSource,
 } from "@/lib/health-export";
+import { resolvePrimaryUserId } from "@/lib/primary-user";
 import { upsertReading } from "@/lib/readings";
 import { recordSyncRun, type SyncOutcome } from "@/lib/sync-runs";
 
@@ -61,6 +62,14 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: "unauthorized" }, { status: 401 });
   }
 
+  let primaryUserId: number;
+  try {
+    primaryUserId = await resolvePrimaryUserId();
+  } catch (err) {
+    console.error("ingest rejected:", err instanceof Error ? err.message : err);
+    return Response.json({ error: "server is not configured for ingest" }, { status: 500 });
+  }
+
   let payload: HealthExportPayload;
   try {
     payload = (await request.json()) as HealthExportPayload;
@@ -89,7 +98,7 @@ export async function POST(request: Request): Promise<Response> {
 
   for (const reading of mapped.readings) {
     try {
-      await upsertReading(reading);
+      await upsertReading({ ...reading, userId: primaryUserId });
       outcomes.get(reading.source)!.synced += 1;
     } catch (err) {
       const message = `${reading.metric} (${reading.readingDate}): ${err instanceof Error ? err.message : String(err)}`;

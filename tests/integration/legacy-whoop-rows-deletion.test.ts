@@ -14,7 +14,12 @@ const CI_DATABASE = "jerkai_ci_test";
 
 const sql = neon(DATABASE_URL || "postgresql://unset:unset@unset/unset");
 
-beforeAll(() => {
+// user_id has no ON DELETE cascade (OQ-3) — every child table is cleared defensively before
+// users, since these tables are shared across the whole test run (fileParallelism: false)
+// and a stray row from any other integration file would block `delete from users`.
+let testUserId: number;
+
+beforeAll(async () => {
   if (!DATABASE_URL) {
     throw new Error(
       "DATABASE_URL is not set. Integration tests need a disposable Neon branch — see scripts/ci/neon-branch.mjs.",
@@ -26,6 +31,12 @@ beforeAll(() => {
         "These tests delete rows between cases and must never target the persistent dev/prod branches.",
     );
   }
+  await sql`delete from biometric_readings`;
+  await sql`delete from manual_macro_entries`;
+  await sql`delete from daily_targets`;
+  await sql`delete from users`;
+  const [user] = await sql`insert into users (email) values ('legacy-whoop-rows-test@example.com') returning id`;
+  testUserId = user.id;
 });
 
 beforeEach(async () => {
@@ -38,8 +49,8 @@ const LEGACY_PAYLOAD = { date: "2021-05-01 07:30:00 -0500", qty: 50, source: "Wh
 const DIRECT_PAYLOAD = { cycle_id: 93845, score_state: "SCORED", score: { resting_heart_rate: 49 } };
 
 const seed = (metric: string, day: string, payload: unknown, source = "whoop") => sql`
-  insert into biometric_readings (source, metric, reading_date, value, unit, raw_payload)
-  values (${source}, ${metric}, ${day}, 50, 'unit', ${JSON.stringify(payload)}::jsonb)
+  insert into biometric_readings (user_id, source, metric, reading_date, value, unit, raw_payload)
+  values (${testUserId}, ${source}, ${metric}, ${day}, 50, 'unit', ${JSON.stringify(payload)}::jsonb)
 `;
 
 describe("delete-legacy-hae-whoop-rows migration", () => {

@@ -23,7 +23,7 @@ export default async function Weekly() {
     redirect("/signin");
   }
 
-  const data = await fetchDashboardData(WEEKLY_LEDGER_WINDOW_DAYS);
+  const data = await fetchDashboardData(WEEKLY_LEDGER_WINDOW_DAYS, Number(session.user.id));
   const view = buildWeeklyView(data);
 
   return <WeeklyLedger rows={view.rows} completedWeeks={view.completedWeeks} />;

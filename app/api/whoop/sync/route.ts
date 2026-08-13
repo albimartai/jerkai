@@ -1,6 +1,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 
 import { sendSyncFailureAlert } from "@/lib/alerts";
+import { resolvePrimaryUserId } from "@/lib/primary-user";
 import { upsertReading } from "@/lib/readings";
 import { recordSyncRun, type SyncOutcome } from "@/lib/sync-runs";
 import { getSql } from "@/lib/db";
@@ -146,6 +147,14 @@ export async function GET(request: Request): Promise<Response> {
     return Response.json({ error: "unauthorized" }, { status: 401 });
   }
 
+  let primaryUserId: number;
+  try {
+    primaryUserId = await resolvePrimaryUserId();
+  } catch (err) {
+    console.error("whoop sync rejected:", err instanceof Error ? err.message : err);
+    return Response.json({ error: "server is not configured for whoop sync" }, { status: 500 });
+  }
+
   const window = resolveWindow(new URL(request.url).searchParams);
   if (!window) {
     return Response.json(
@@ -197,7 +206,7 @@ export async function GET(request: Request): Promise<Response> {
   const errors: string[] = [];
   for (const reading of mapped.readings) {
     try {
-      await upsertReading(reading);
+      await upsertReading({ ...reading, userId: primaryUserId });
       synced += 1;
     } catch (err) {
       errors.push(`${reading.metric} (${reading.readingDate}): ${message(err)}`);

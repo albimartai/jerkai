@@ -9,6 +9,7 @@ import { resolveTargetForDate, type TargetRow } from "@/lib/target-resolution";
 export { resolveTargetForDate, type TargetRow };
 
 export type NewTarget = {
+  userId: number;
   effectiveDate: string;
   caloriesTarget: number;
   proteinTargetG: number;
@@ -20,8 +21,8 @@ export async function saveTarget(target: NewTarget): Promise<void> {
   const sql = getSql();
   await sql`
     insert into daily_targets
-      (effective_date, calories_target, protein_target_g, carbs_target_g, fat_target_g)
-    values (${target.effectiveDate}, ${target.caloriesTarget}, ${target.proteinTargetG},
+      (user_id, effective_date, calories_target, protein_target_g, carbs_target_g, fat_target_g)
+    values (${target.userId}, ${target.effectiveDate}, ${target.caloriesTarget}, ${target.proteinTargetG},
             ${target.carbsTargetG}, ${target.fatTargetG})
   `;
 }
@@ -36,7 +37,7 @@ type TargetDbRow = {
   created_at: string;
 };
 
-export async function fetchTargets(): Promise<TargetRow[]> {
+export async function fetchTargets(userId: number): Promise<TargetRow[]> {
   const sql = getSql();
   const rows = (await sql`
     select id, to_char(effective_date, 'YYYY-MM-DD') as effective_date,
@@ -46,6 +47,7 @@ export async function fetchTargets(): Promise<TargetRow[]> {
            fat_target_g::float8 as fat_target_g,
            created_at
     from daily_targets
+    where user_id = ${userId}
     order by effective_date, id
   `) as TargetDbRow[];
 

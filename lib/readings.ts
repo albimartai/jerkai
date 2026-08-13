@@ -9,6 +9,7 @@ import type { ReadingSource } from "@/lib/sources";
 // Session 8 unchanged.
 
 export type UpsertableReading = {
+  userId: number;
   source: ReadingSource;
   metric: string;
   readingDate: string; // yyyy-MM-dd, user/device-local calendar day
@@ -33,7 +34,7 @@ export async function upsertReading(reading: UpsertableReading): Promise<void> {
     // Session 8 — but the machinery stays for the next one.)
     const existing = await sql`
       select raw_payload from biometric_readings
-      where source = ${reading.source} and metric = ${reading.metric}
+      where user_id = ${reading.userId} and source = ${reading.source} and metric = ${reading.metric}
         and reading_date = ${reading.readingDate}
     `;
     const merged = mergeDailyPoints(
@@ -44,13 +45,13 @@ export async function upsertReading(reading: UpsertableReading): Promise<void> {
     rawPayload = { points: merged.points };
   }
 
-  // Idempotent per (source, metric, date): pipes re-send current days on
-  // every scheduled run, and backfills overlap days.
+  // Idempotent per (user_id, source, metric, date): pipes re-send current
+  // days on every scheduled run, and backfills overlap days.
   await sql`
-    insert into biometric_readings (source, metric, reading_date, value, unit, raw_payload)
-    values (${reading.source}, ${reading.metric}, ${reading.readingDate},
+    insert into biometric_readings (user_id, source, metric, reading_date, value, unit, raw_payload)
+    values (${reading.userId}, ${reading.source}, ${reading.metric}, ${reading.readingDate},
             ${value}, ${reading.unit}, ${JSON.stringify(rawPayload)}::jsonb)
-    on conflict (source, metric, reading_date)
+    on conflict (user_id, source, metric, reading_date)
     do update set value = excluded.value,
                   unit = excluded.unit,
                   raw_payload = excluded.raw_payload,

@@ -134,7 +134,20 @@ function stubWhoopApi(
   });
 }
 
-beforeAll(() => {
+// This pipe has no session (machine-to-machine), so it attributes every row via
+// PRIMARY_USER_EMAIL resolution (NFR-71) — one fixed test user backs every pre-existing
+// test in this file that isn't itself exercising attribution (that's the AC-MU11 block below,
+// which stubs its own PRIMARY_USER_EMAIL value and manages its own users rows).
+const PRIMARY_EMAIL = "whoop-sync-test-primary@example.com";
+
+// user_id has no ON DELETE cascade (OQ-3) — a stray biometric_readings/manual_macro_entries/
+// daily_targets row from any other integration file blocks `delete from users` with a foreign
+// key violation, since these tables and users are all shared across the whole test run
+// (fileParallelism: false). Every child table is cleared defensively before users, regardless
+// of whether this file itself writes to all of them.
+let testUserId: number;
+
+beforeAll(async () => {
   if (!DATABASE_URL) {
     throw new Error(
       "DATABASE_URL is not set. Integration tests need a disposable Neon branch — see scripts/ci/neon-branch.mjs.",
@@ -151,6 +164,13 @@ beforeAll(() => {
   vi.stubEnv("WHOOP_CLIENT_ID", "test-client");
   vi.stubEnv("WHOOP_CLIENT_SECRET", "test-secret");
   vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://jerkai.app");
+  vi.stubEnv("PRIMARY_USER_EMAIL", PRIMARY_EMAIL);
+  await sql`delete from biometric_readings`;
+  await sql`delete from manual_macro_entries`;
+  await sql`delete from daily_targets`;
+  await sql`delete from users`;
+  const [user] = await sql`insert into users (email) values (${PRIMARY_EMAIL}) returning id`;
+  testUserId = user.id;
 });
 
 beforeEach(async () => {
@@ -268,8 +288,8 @@ describe("GET /api/whoop/sync — happy path", () => {
     // Whoop-direct value replaces it in place, which is exactly how the
     // planned historical backfill heals the old timeline.
     await sql`
-      insert into biometric_readings (source, metric, reading_date, value, unit, raw_payload)
-      values ('whoop', 'sleep_duration', '2026-07-09', 7.4, 'hr', '{"totalSleep": 7.4}'::jsonb)
+      insert into biometric_readings (user_id, source, metric, reading_date, value, unit, raw_payload)
+      values (${testUserId}, 'whoop', 'sleep_duration', '2026-07-09', 7.4, 'hr', '{"totalSleep": 7.4}'::jsonb)
     `;
     stubWhoopApi({ recovery: [], sleep: [SLEEP], cycle: [], workout: [] });
     await GET(syncRequest(AUTH));
@@ -333,5 +353,36 @@ describe("GET /api/whoop/sync — failure paths", () => {
     const rows = await sql`select refresh_token_enc from whoop_tokens`;
     expect(rows).toHaveLength(1);
     expect(sendSyncFailureAlert).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * AUTO-GENERATED TEST STUB — JerkAI Contract
+ * PRD Target: JerkAI — Build PRD: Multi-User Data Model Retrofit
+ *
+ * DO NOT EDIT test names, AC IDs, or stub assertions during implementation.
+ * Implementation code must be written to satisfy these stubs.
+ * Editing stubs to fit implementation triggers a blocking finding in jerkai-falsify-diff.
+ */
+describe("GET /api/whoop/sync — AC-MU11: attribution via PRIMARY_USER_EMAIL", () => {
+  const PRIMARY_EMAIL = "primary-mu11@example.com";
+
+  afterEach(async () => {
+    await sql`delete from biometric_readings`;
+    await sql`delete from users`;
+  });
+
+  it("AC-MU11: readings upserted via upsertReading are attributed to the user resolved by looking up PRIMARY_USER_EMAIL in users", async () => {
+    await sql`delete from biometric_readings`;
+    await sql`delete from users`;
+    const [user] = await sql`insert into users (email) values (${PRIMARY_EMAIL}) returning id`;
+    vi.stubEnv("PRIMARY_USER_EMAIL", PRIMARY_EMAIL);
+
+    stubWhoopApi({ recovery: [RECOVERY], sleep: [SLEEP], cycle: [CYCLE], workout: [] });
+    const res = await GET(syncRequest(AUTH));
+    expect(res.status).toBe(200);
+
+    const rows = await sql`select distinct user_id from biometric_readings`;
+    expect(rows).toEqual([{ user_id: user.id }]);
   });
 });

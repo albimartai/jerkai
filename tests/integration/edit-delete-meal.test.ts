@@ -31,13 +31,26 @@ beforeAll(() => {
   }
 });
 
+// Every write in this file is scoped by user_id (NFR-67) — a single test user, recreated
+// fresh every case, backs every pre-existing test that isn't itself exercising multi-user
+// scoping (those live in the AC-MU5 block below, which creates its own users).
+let testUserId: number;
+
 beforeEach(async () => {
+  // user_id has no ON DELETE cascade (OQ-3) — biometric_readings is cleared defensively too,
+  // since it's shared across the whole test run (fileParallelism: false) and a stray row left
+  // by another integration file would otherwise block `delete from users` with an FK violation.
+  await sql`delete from biometric_readings`;
   await sql`delete from manual_macro_entries`;
   await sql`delete from daily_targets`;
+  await sql`delete from users`;
+  const [user] = await sql`insert into users (email) values ('edit-delete-meal-test@example.com') returning id`;
+  testUserId = user.id;
 });
 
 async function saveOne(overrides: Partial<Parameters<typeof saveMealEntry>[0]> = {}) {
   await saveMealEntry({
+    userId: testUserId,
     mealType: "lunch",
     entryDate: "2026-07-20",
     description: "chicken salad",
@@ -48,7 +61,7 @@ async function saveOne(overrides: Partial<Parameters<typeof saveMealEntry>[0]> =
     idempotencyKey: `key-${Math.random()}`,
     ...overrides,
   });
-  const [entry] = await fetchMealEntriesForDate(overrides.entryDate ?? "2026-07-20");
+  const [entry] = await fetchMealEntriesForDate(overrides.entryDate ?? "2026-07-20", testUserId);
   return entry;
 }
 
@@ -79,6 +92,7 @@ describe("updateMealEntry — AC-M18 update in place", () => {
 
     const result = await updateMealEntry({
       id: original.id,
+      userId: testUserId,
       mealType: "dinner",
       entryDate: "2026-07-20",
       description: "steak and rice",
@@ -113,6 +127,7 @@ describe("updateMealEntry — AC-M18 update in place", () => {
 describe("updateMealEntry — AC-M19 date re-attribution", () => {
   it("editing entryDate moves the entry between days; both days recompute against each day's effective target", async () => {
     await saveTarget({
+      userId: testUserId,
       effectiveDate: "2026-07-01",
       caloriesTarget: 2500,
       proteinTargetG: 180,
@@ -120,6 +135,7 @@ describe("updateMealEntry — AC-M19 date re-attribution", () => {
       fatTargetG: null,
     });
     await saveTarget({
+      userId: testUserId,
       effectiveDate: "2026-07-18",
       caloriesTarget: 2100,
       proteinTargetG: 170,
@@ -131,6 +147,7 @@ describe("updateMealEntry — AC-M19 date re-attribution", () => {
 
     await updateMealEntry({
       id: original.id,
+      userId: testUserId,
       mealType: original.mealType,
       entryDate: "2026-07-20",
       description: original.description,
@@ -140,15 +157,15 @@ describe("updateMealEntry — AC-M19 date re-attribution", () => {
       fatG: original.fatG,
     });
 
-    const oldDayEntries = await fetchMealEntriesForDate("2026-07-10");
-    const newDayEntries = await fetchMealEntriesForDate("2026-07-20");
+    const oldDayEntries = await fetchMealEntriesForDate("2026-07-10", testUserId);
+    const newDayEntries = await fetchMealEntriesForDate("2026-07-20", testUserId);
     expect(oldDayEntries).toHaveLength(0);
     expect(newDayEntries).toHaveLength(1);
 
-    const totals = await fetchDailyCalorieTotals(["2026-07-10", "2026-07-20"]);
+    const totals = await fetchDailyCalorieTotals(["2026-07-10", "2026-07-20"], testUserId);
     expect(totals).toEqual([null, 700]);
 
-    const targets = await fetchTargets();
+    const targets = await fetchTargets(testUserId);
     expect(resolveTargetForDate(targets, "2026-07-10")?.caloriesTarget).toBe(2500);
     expect(resolveTargetForDate(targets, "2026-07-20")?.caloriesTarget).toBe(2100);
   });
@@ -160,6 +177,7 @@ describe("updateMealEntry — AC-M20 no-op save", () => {
 
     const result = await updateMealEntry({
       id: original.id,
+      userId: testUserId,
       mealType: original.mealType,
       entryDate: original.entryDate,
       description: original.description,
@@ -183,6 +201,7 @@ describe("updateMealEntry — NFR-34 fail closed", () => {
   it("updating an unknown id returns not_found, inserts nothing, and does not silently no-op as success", async () => {
     const result = await updateMealEntry({
       id: 999999999,
+      userId: testUserId,
       mealType: "snack",
       entryDate: "2026-07-20",
       description: null,
@@ -203,7 +222,7 @@ describe("deleteMealEntry — AC-M21 confirmed delete", () => {
   it("hard-removes the row", async () => {
     const original = await saveOne();
 
-    const result = await deleteMealEntry(original.id);
+    const result = await deleteMealEntry(original.id, testUserId);
 
     expect(result.deleted).toBe(true);
     const rows = await sql`select count(*)::int as count from manual_macro_entries where id = ${original.id}`;
@@ -215,9 +234,9 @@ describe("deleteMealEntry — AC-M22 recompute after delete", () => {
   it("deleting a day's only entry reverts fetchDailyCalorieTotals to a null gap, not zero", async () => {
     const entry = await saveOne({ entryDate: "2026-07-20", calories: 500 });
 
-    await deleteMealEntry(entry.id);
+    await deleteMealEntry(entry.id, testUserId);
 
-    const totals = await fetchDailyCalorieTotals(["2026-07-19", "2026-07-20", "2026-07-21"]);
+    const totals = await fetchDailyCalorieTotals(["2026-07-19", "2026-07-20", "2026-07-21"], testUserId);
     expect(totals).toEqual([null, null, null]);
   });
 
@@ -225,9 +244,9 @@ describe("deleteMealEntry — AC-M22 recompute after delete", () => {
     const first = await saveOne({ entryDate: "2026-07-20", calories: 500, idempotencyKey: "e1" });
     await saveOne({ entryDate: "2026-07-20", calories: 300, idempotencyKey: "e2" });
 
-    await deleteMealEntry(first.id);
+    await deleteMealEntry(first.id, testUserId);
 
-    const totals = await fetchDailyCalorieTotals(["2026-07-20"]);
+    const totals = await fetchDailyCalorieTotals(["2026-07-20"], testUserId);
     expect(totals).toEqual([300]);
   });
 });
@@ -236,10 +255,10 @@ describe("deleteMealEntry — NFR-37 idempotency", () => {
   it("delete-then-delete of the same id: the second call returns deleted:false, not an error", async () => {
     const entry = await saveOne();
 
-    const first = await deleteMealEntry(entry.id);
+    const first = await deleteMealEntry(entry.id, testUserId);
     expect(first.deleted).toBe(true);
 
-    await expect(deleteMealEntry(entry.id)).resolves.toEqual({ deleted: false, entry: null });
+    await expect(deleteMealEntry(entry.id, testUserId)).resolves.toEqual({ deleted: false, entry: null });
   });
 
   it("edit-then-delete: editing then deleting the same row succeeds cleanly", async () => {
@@ -247,6 +266,7 @@ describe("deleteMealEntry — NFR-37 idempotency", () => {
 
     const edited = await updateMealEntry({
       id: entry.id,
+      userId: testUserId,
       mealType: entry.mealType,
       entryDate: entry.entryDate,
       description: "updated",
@@ -257,17 +277,18 @@ describe("deleteMealEntry — NFR-37 idempotency", () => {
     });
     expect(edited.ok).toBe(true);
 
-    const deleted = await deleteMealEntry(entry.id);
+    const deleted = await deleteMealEntry(entry.id, testUserId);
     expect(deleted.deleted).toBe(true);
   });
 
   it("delete-then-edit: editing an already-deleted id fails closed (not_found), not a crash", async () => {
     const entry = await saveOne();
 
-    await deleteMealEntry(entry.id);
+    await deleteMealEntry(entry.id, testUserId);
 
     const result = await updateMealEntry({
       id: entry.id,
+      userId: testUserId,
       mealType: entry.mealType,
       entryDate: entry.entryDate,
       description: entry.description,
@@ -283,6 +304,72 @@ describe("deleteMealEntry — NFR-37 idempotency", () => {
 
 describe("deleteMealEntry — NFR-34 fail closed on unknown id", () => {
   it("deleting a never-existed id returns deleted:false without throwing", async () => {
-    await expect(deleteMealEntry(999999999)).resolves.toEqual({ deleted: false, entry: null });
+    await expect(deleteMealEntry(999999999, testUserId)).resolves.toEqual({ deleted: false, entry: null });
+  });
+});
+
+/**
+ * AUTO-GENERATED TEST STUB — JerkAI Contract
+ * PRD Target: JerkAI — Build PRD: Multi-User Data Model Retrofit
+ *
+ * DO NOT EDIT test names, AC IDs, or stub assertions during implementation.
+ * Implementation code must be written to satisfy these stubs.
+ * Editing stubs to fit implementation triggers a blocking finding in jerkai-falsify-diff.
+ */
+async function createUser(email: string): Promise<number> {
+  const [row] = await sql`insert into users (email) values (${email}) returning id`;
+  return row.id;
+}
+
+async function saveOneFor(userId: number, overrides: Partial<Parameters<typeof saveMealEntry>[0]> = {}) {
+  await saveMealEntry({
+    userId,
+    mealType: "lunch",
+    entryDate: "2026-07-20",
+    description: "chicken salad",
+    calories: 612.5,
+    proteinG: 40.25,
+    carbsG: 30.1,
+    fatG: 18.75,
+    idempotencyKey: `mu5-key-${Math.random()}`,
+    ...overrides,
+  });
+  const [entry] = await fetchMealEntriesForDate(overrides.entryDate ?? "2026-07-20", userId);
+  return entry;
+}
+
+describe("AC-MU5 — cross-user update/delete is indistinguishable from not-found", () => {
+  it("AC-MU5: another user's updateMealEntry call on my row returns not_found and leaves the row unmodified", async () => {
+    const ownerId = await createUser("owner-mu5a@example.com");
+    const intruderId = await createUser("intruder-mu5a@example.com");
+    const original = await saveOneFor(ownerId);
+
+    const result = await updateMealEntry({
+      id: original.id,
+      userId: intruderId,
+      mealType: "dinner",
+      entryDate: original.entryDate,
+      description: "tampered",
+      calories: 1,
+      proteinG: null,
+      carbsG: null,
+      fatG: null,
+    });
+
+    expect(result).toEqual({ ok: false, reason: "not_found" });
+    const [stillThere] = await sql`select description from manual_macro_entries where id = ${original.id}`;
+    expect(stillThere.description).toBe("chicken salad");
+  });
+
+  it("AC-MU5: another user's deleteMealEntry call on my row returns deleted:false and does not remove it", async () => {
+    const ownerId = await createUser("owner-mu5b@example.com");
+    const intruderId = await createUser("intruder-mu5b@example.com");
+    const original = await saveOneFor(ownerId);
+
+    const result = await deleteMealEntry(original.id, intruderId);
+
+    expect(result).toEqual({ deleted: false, entry: null });
+    const rows = await sql`select count(*)::int as count from manual_macro_entries where id = ${original.id}`;
+    expect(rows[0].count).toBe(1);
   });
 });
