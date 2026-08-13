@@ -147,6 +147,90 @@ describe("fetchDashboardData — idempotent read path (NFR-3)", () => {
   });
 });
 
+/**
+ * AUTO-GENERATED TEST STUB — JerkAI Contract
+ * PRD Target: JerkAI — Build PRD: Multi-User Data Model Retrofit
+ *
+ * DO NOT EDIT test names, AC IDs, or stub assertions during implementation.
+ * Implementation code must be written to satisfy these stubs.
+ * Editing stubs to fit implementation triggers a blocking finding in jerkai-falsify-diff.
+ */
+async function createUser(email: string): Promise<number> {
+  const [row] = await sql`insert into users (email) values (${email}) returning id`;
+  return row.id;
+}
+
+const bodyFatFor = (userId: number, readingDate: string, value: number) =>
+  upsertReading({
+    source: "fitdays",
+    metric: "body_fat_pct",
+    readingDate,
+    value,
+    unit: "%",
+    aggregation: "latest",
+    rawPayload: { date: `${readingDate} 07:30:00 -0500`, qty: value },
+    // @ts-expect-error userId does not exist on UpsertableReading yet — this slice adds it (NFR-67).
+    userId,
+  });
+
+describe("fetchDashboardData — per-user scoping (AC-MU1/AC-MU2/AC-MU3/AC-MU12)", () => {
+  beforeEach(async () => {
+    await sql`delete from users`;
+  });
+
+  it("AC-MU1: a user with zero readings of their own sees an empty axis, even when another user has readings", async () => {
+    const otherUserId = await createUser("other-mu1@example.com");
+    const userId = await createUser("me-mu1@example.com");
+    await bodyFatFor(otherUserId, "2026-07-14", 18.4);
+
+    // @ts-expect-error fetchDashboardData does not take a userId yet — this slice adds it.
+    const data = await fetchDashboardData(7, userId);
+
+    expect(data.axis).toEqual([]);
+    expect(data.latestDay).toBeNull();
+  });
+
+  it("AC-MU2: two users each with a reading for the identical (source, metric, date) triple coexist independently", async () => {
+    const userA = await createUser("a-mu2@example.com");
+    const userB = await createUser("b-mu2@example.com");
+    await bodyFatFor(userA, "2026-07-16", 18.2);
+    await bodyFatFor(userB, "2026-07-16", 22.7);
+
+    // @ts-expect-error fetchDashboardData does not take a userId yet — this slice adds it.
+    const dataA = await fetchDashboardData(1, userA);
+    // @ts-expect-error fetchDashboardData does not take a userId yet — this slice adds it.
+    const dataB = await fetchDashboardData(1, userB);
+
+    expect(dataA.series.bodyFatPct).toEqual([18.2]);
+    expect(dataB.series.bodyFatPct).toEqual([22.7]);
+  });
+
+  it("AC-MU3: a user's axis end date is derived only from their own rows, never a more recent reading from another user", async () => {
+    const userA = await createUser("a-mu3@example.com");
+    const userB = await createUser("b-mu3@example.com");
+    await bodyFatFor(userA, "2026-07-10", 18.0);
+    await bodyFatFor(userB, "2026-07-20", 22.0); // more recent, but belongs to userB
+
+    // @ts-expect-error fetchDashboardData does not take a userId yet — this slice adds it.
+    const dataA = await fetchDashboardData(3, userA);
+
+    expect(dataA.latestDay).toBe("2026-07-10");
+    expect(dataA.axis).toEqual(["2026-07-08", "2026-07-09", "2026-07-10"]);
+  });
+
+  it("AC-MU12: migration continuity — a user's pre-existing rows are still returned once scoped onto their own user_id", async () => {
+    const userId = await createUser("albert-mu12@example.com");
+    await bodyFatFor(userId, "2026-07-14", 18.4);
+    await bodyFatFor(userId, "2026-07-16", 18.2);
+
+    // @ts-expect-error fetchDashboardData does not take a userId yet — this slice adds it.
+    const data = await fetchDashboardData(3, userId);
+
+    expect(data.axis).toEqual(["2026-07-14", "2026-07-15", "2026-07-16"]);
+    expect(data.series.bodyFatPct).toEqual([18.4, null, 18.2]);
+  });
+});
+
 describe("fetchDashboardData — empty and partial states (AC-D13, NFR-8)", () => {
   it("AC-D13: days with no data render as null gaps, not zeros", async () => {
     await bodyFat("2026-07-13", 18.6);

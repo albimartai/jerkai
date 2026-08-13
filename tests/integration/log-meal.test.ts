@@ -131,6 +131,146 @@ describe("AC-M8 — fetchDailyCalorieTotals: gap vs. a genuinely low logged day"
   });
 });
 
+/**
+ * AUTO-GENERATED TEST STUB — JerkAI Contract
+ * PRD Target: JerkAI — Build PRD: Multi-User Data Model Retrofit
+ *
+ * DO NOT EDIT test names, AC IDs, or stub assertions during implementation.
+ * Implementation code must be written to satisfy these stubs.
+ * Editing stubs to fit implementation triggers a blocking finding in jerkai-falsify-diff.
+ */
+async function createUser(email: string): Promise<number> {
+  const [row] = await sql`insert into users (email) values (${email}) returning id`;
+  return row.id;
+}
+
+describe("AC-MU4 — meal entries scoped per user", () => {
+  beforeEach(async () => {
+    await sql`delete from users`;
+  });
+
+  it("AC-MU4 (bare case): a user with zero entries of their own sees an empty list and an empty calorie total, even when another user has entries on the identical date", async () => {
+    const otherUserId = await createUser("other-mu4@example.com");
+    const userId = await createUser("me-mu4@example.com");
+    await saveMealEntry({
+      mealType: "lunch",
+      entryDate: "2026-07-20",
+      description: "other user's lunch",
+      calories: 900,
+      proteinG: null,
+      carbsG: null,
+      fatG: null,
+      idempotencyKey: "mu4-other-key",
+      // @ts-expect-error userId does not exist on NewMealEntry yet — this slice adds it (NFR-67).
+      userId: otherUserId,
+    });
+
+    // @ts-expect-error fetchMealEntriesForDate does not take a userId yet — this slice adds it.
+    const myEntries = await fetchMealEntriesForDate("2026-07-20", userId);
+    expect(myEntries).toEqual([]);
+
+    // @ts-expect-error fetchDailyCalorieTotals does not take a userId yet — this slice adds it.
+    const totals = await fetchDailyCalorieTotals(["2026-07-20"], userId);
+    expect(totals).toEqual([null]);
+  });
+
+  it("AC-MU4: two users logging on the identical date each see only their own entry", async () => {
+    const userA = await createUser("a-mu4@example.com");
+    const userB = await createUser("b-mu4@example.com");
+    await saveMealEntry({
+      mealType: "dinner",
+      entryDate: "2026-07-21",
+      description: "user A's dinner",
+      calories: 700,
+      proteinG: null,
+      carbsG: null,
+      fatG: null,
+      idempotencyKey: "mu4-a-key",
+      // @ts-expect-error userId does not exist on NewMealEntry yet — this slice adds it.
+      userId: userA,
+    });
+    await saveMealEntry({
+      mealType: "dinner",
+      entryDate: "2026-07-21",
+      description: "user B's dinner",
+      calories: 650,
+      proteinG: null,
+      carbsG: null,
+      fatG: null,
+      idempotencyKey: "mu4-b-key",
+      // @ts-expect-error userId does not exist on NewMealEntry yet — this slice adds it.
+      userId: userB,
+    });
+
+    // @ts-expect-error fetchMealEntriesForDate does not take a userId yet — this slice adds it.
+    const aEntries = await fetchMealEntriesForDate("2026-07-21", userA);
+    // @ts-expect-error fetchMealEntriesForDate does not take a userId yet — this slice adds it.
+    const bEntries = await fetchMealEntriesForDate("2026-07-21", userB);
+
+    expect(aEntries).toHaveLength(1);
+    expect(aEntries[0].description).toBe("user A's dinner");
+    expect(bEntries).toHaveLength(1);
+    expect(bEntries[0].description).toBe("user B's dinner");
+  });
+});
+
+describe("AC-MU6 — daily targets scoped per user", () => {
+  beforeEach(async () => {
+    await sql`delete from users`;
+  });
+
+  it("AC-MU6 (bare case): a user with zero targets of their own sees an empty list, even when another user has a target", async () => {
+    const otherUserId = await createUser("other-mu6@example.com");
+    const userId = await createUser("me-mu6@example.com");
+    await saveTarget({
+      effectiveDate: "2026-07-01",
+      caloriesTarget: 2500,
+      proteinTargetG: 180,
+      carbsTargetG: null,
+      fatTargetG: null,
+      // @ts-expect-error userId does not exist on NewTarget yet — this slice adds it (NFR-67).
+      userId: otherUserId,
+    });
+
+    // @ts-expect-error fetchTargets does not take a userId yet — this slice adds it.
+    const myTargets = await fetchTargets(userId);
+    expect(myTargets).toEqual([]);
+  });
+
+  it("AC-MU6: two users' targets are independent, even with the identical effective date", async () => {
+    const userA = await createUser("a-mu6@example.com");
+    const userB = await createUser("b-mu6@example.com");
+    await saveTarget({
+      effectiveDate: "2026-07-01",
+      caloriesTarget: 2500,
+      proteinTargetG: 180,
+      carbsTargetG: null,
+      fatTargetG: null,
+      // @ts-expect-error userId does not exist on NewTarget yet — this slice adds it.
+      userId: userA,
+    });
+    await saveTarget({
+      effectiveDate: "2026-07-01",
+      caloriesTarget: 1800,
+      proteinTargetG: 150,
+      carbsTargetG: null,
+      fatTargetG: null,
+      // @ts-expect-error userId does not exist on NewTarget yet — this slice adds it.
+      userId: userB,
+    });
+
+    // @ts-expect-error fetchTargets does not take a userId yet — this slice adds it.
+    const aTargets = await fetchTargets(userA);
+    // @ts-expect-error fetchTargets does not take a userId yet — this slice adds it.
+    const bTargets = await fetchTargets(userB);
+
+    expect(aTargets).toHaveLength(1);
+    expect(aTargets[0].caloriesTarget).toBe(2500);
+    expect(bTargets).toHaveLength(1);
+    expect(bTargets[0].caloriesTarget).toBe(1800);
+  });
+});
+
 describe("AC-M4/AC-M10 — backdated entries evaluated against the historical target", () => {
   it("a backdated entry's day resolves against the target that was in force then, not the current one", async () => {
     await saveTarget({

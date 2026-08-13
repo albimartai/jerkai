@@ -303,3 +303,53 @@ describe("POST /api/ingest/health — partial success", () => {
     expect(sendSyncFailureAlert).toHaveBeenCalledTimes(1);
   });
 });
+
+/**
+ * AUTO-GENERATED TEST STUB — JerkAI Contract
+ * PRD Target: JerkAI — Build PRD: Multi-User Data Model Retrofit
+ *
+ * DO NOT EDIT test names, AC IDs, or stub assertions during implementation.
+ * Implementation code must be written to satisfy these stubs.
+ * Editing stubs to fit implementation triggers a blocking finding in jerkai-falsify-diff.
+ */
+describe("POST /api/ingest/health — AC-MU10: attribution via PRIMARY_USER_EMAIL", () => {
+  const PRIMARY_EMAIL = "primary-mu10@example.com";
+
+  afterEach(async () => {
+    await sql`delete from users`;
+  });
+
+  it("AC-MU10: every landed row is attributed to the user resolved by looking up PRIMARY_USER_EMAIL in users, never a hardcoded id", async () => {
+    await sql`delete from users`;
+    const [user] = await sql`insert into users (email) values (${PRIMARY_EMAIL}) returning id`;
+    vi.stubEnv("PRIMARY_USER_EMAIL", PRIMARY_EMAIL);
+
+    const res = await POST(ingestRequest(JSON.stringify(fullPayload), SECRET));
+    expect(res.status).toBe(200);
+
+    const rows = await sql`select distinct user_id from biometric_readings`;
+    expect(rows).toEqual([{ user_id: user.id }]);
+  });
+
+  it("AC-MU10: fails closed (no rows written) when PRIMARY_USER_EMAIL resolves to zero users", async () => {
+    await sql`delete from users`;
+    vi.stubEnv("PRIMARY_USER_EMAIL", "nobody-mu10@example.com");
+
+    const res = await POST(ingestRequest(JSON.stringify(fullPayload), SECRET));
+
+    expect(res.status).not.toBe(200);
+    expect(await readingRows()).toEqual([]);
+  });
+
+  it("AC-MU10: fails closed (no rows written) when PRIMARY_USER_EMAIL resolves to more than one user", async () => {
+    await sql`delete from users`;
+    await sql`insert into users (email) values (${PRIMARY_EMAIL})`;
+    await sql`insert into users (email) values (${PRIMARY_EMAIL})`;
+    vi.stubEnv("PRIMARY_USER_EMAIL", PRIMARY_EMAIL);
+
+    const res = await POST(ingestRequest(JSON.stringify(fullPayload), SECRET));
+
+    expect(res.status).not.toBe(200);
+    expect(await readingRows()).toEqual([]);
+  });
+});

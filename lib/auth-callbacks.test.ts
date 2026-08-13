@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { authorized, signIn } from "@/lib/auth-callbacks";
+// `session` is imported dynamically inside the AC-MU7 block below (not here at module top)
+// so a not-yet-existing named export fails only that describe block, not every test in this
+// file — a static named import of a missing export would break the already-shipped AC-AU
+// suite above as collateral damage.
+import * as authCallbacksModule from "@/lib/auth-callbacks";
 
 // These two callbacks are the automatable core of the login gate. The full
 // magic-link click-through (email delivery + a human clicking) stays manually
@@ -145,5 +150,39 @@ describe("authorized callback — session gate", () => {
   it("AC-AU7: is unaffected by the allowlist's representation — gates on session presence alone", () => {
     expect(authorized({ auth: null })).toBe(false);
     expect(authorized({ auth: { user: { email: "anyone@example.com" } } })).toBe(true);
+  });
+});
+
+/**
+ * AUTO-GENERATED TEST STUB — JerkAI Contract
+ * PRD Target: JerkAI — Build PRD: Multi-User Data Model Retrofit
+ *
+ * DO NOT EDIT test names, AC IDs, or stub assertions during implementation.
+ * Implementation code must be written to satisfy these stubs.
+ * Editing stubs to fit implementation triggers a blocking finding in jerkai-falsify-diff.
+ */
+describe("session callback — AC-MU7: session.user.id resolves from the JWT sub claim", () => {
+  it("AC-MU7: session.user.id equals the JWT token's sub claim, as a string", () => {
+    const result = authCallbacksModule.session({
+      session: {
+        user: { name: "Albert", email: "albert.martinez.90@gmail.com", image: null },
+        expires: "2099-01-01T00:00:00.000Z",
+      },
+      token: { sub: "42" },
+    });
+
+    expect(result.user.id).toBe("42");
+  });
+
+  it("AC-MU7: a different token.sub produces a different session.user.id (not a hardcoded value)", () => {
+    const result = authCallbacksModule.session({
+      session: {
+        user: { name: "Friend", email: "friend@example.com", image: null },
+        expires: "2099-01-01T00:00:00.000Z",
+      },
+      token: { sub: "7" },
+    });
+
+    expect(result.user.id).toBe("7");
   });
 });

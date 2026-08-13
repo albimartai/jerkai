@@ -286,3 +286,77 @@ describe("deleteMealEntry — NFR-34 fail closed on unknown id", () => {
     await expect(deleteMealEntry(999999999)).resolves.toEqual({ deleted: false, entry: null });
   });
 });
+
+/**
+ * AUTO-GENERATED TEST STUB — JerkAI Contract
+ * PRD Target: JerkAI — Build PRD: Multi-User Data Model Retrofit
+ *
+ * DO NOT EDIT test names, AC IDs, or stub assertions during implementation.
+ * Implementation code must be written to satisfy these stubs.
+ * Editing stubs to fit implementation triggers a blocking finding in jerkai-falsify-diff.
+ */
+async function createUser(email: string): Promise<number> {
+  const [row] = await sql`insert into users (email) values (${email}) returning id`;
+  return row.id;
+}
+
+async function saveOneFor(userId: number, overrides: Partial<Parameters<typeof saveMealEntry>[0]> = {}) {
+  await saveMealEntry({
+    mealType: "lunch",
+    entryDate: "2026-07-20",
+    description: "chicken salad",
+    calories: 612.5,
+    proteinG: 40.25,
+    carbsG: 30.1,
+    fatG: 18.75,
+    idempotencyKey: `mu5-key-${Math.random()}`,
+    ...overrides,
+    // @ts-expect-error userId does not exist on NewMealEntry yet — this slice adds it (NFR-67).
+    userId,
+  });
+  // @ts-expect-error fetchMealEntriesForDate does not take a userId yet — this slice adds it.
+  const [entry] = await fetchMealEntriesForDate(overrides.entryDate ?? "2026-07-20", userId);
+  return entry;
+}
+
+describe("AC-MU5 — cross-user update/delete is indistinguishable from not-found", () => {
+  beforeEach(async () => {
+    await sql`delete from users`;
+  });
+
+  it("AC-MU5: another user's updateMealEntry call on my row returns not_found and leaves the row unmodified", async () => {
+    const ownerId = await createUser("owner-mu5a@example.com");
+    const intruderId = await createUser("intruder-mu5a@example.com");
+    const original = await saveOneFor(ownerId);
+
+    const result = await updateMealEntry({
+      id: original.id,
+      mealType: "dinner",
+      entryDate: original.entryDate,
+      description: "tampered",
+      calories: 1,
+      proteinG: null,
+      carbsG: null,
+      fatG: null,
+      // @ts-expect-error userId does not exist on EditedMealEntry yet — this slice adds it.
+      userId: intruderId,
+    });
+
+    expect(result).toEqual({ ok: false, reason: "not_found" });
+    const [stillThere] = await sql`select description from manual_macro_entries where id = ${original.id}`;
+    expect(stillThere.description).toBe("chicken salad");
+  });
+
+  it("AC-MU5: another user's deleteMealEntry call on my row returns deleted:false and does not remove it", async () => {
+    const ownerId = await createUser("owner-mu5b@example.com");
+    const intruderId = await createUser("intruder-mu5b@example.com");
+    const original = await saveOneFor(ownerId);
+
+    // @ts-expect-error deleteMealEntry does not take a userId yet — this slice adds it.
+    const result = await deleteMealEntry(original.id, intruderId);
+
+    expect(result).toEqual({ deleted: false, entry: null });
+    const rows = await sql`select count(*)::int as count from manual_macro_entries where id = ${original.id}`;
+    expect(rows[0].count).toBe(1);
+  });
+});

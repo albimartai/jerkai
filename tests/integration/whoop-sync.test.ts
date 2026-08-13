@@ -335,3 +335,32 @@ describe("GET /api/whoop/sync — failure paths", () => {
     expect(sendSyncFailureAlert).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * AUTO-GENERATED TEST STUB — JerkAI Contract
+ * PRD Target: JerkAI — Build PRD: Multi-User Data Model Retrofit
+ *
+ * DO NOT EDIT test names, AC IDs, or stub assertions during implementation.
+ * Implementation code must be written to satisfy these stubs.
+ * Editing stubs to fit implementation triggers a blocking finding in jerkai-falsify-diff.
+ */
+describe("GET /api/whoop/sync — AC-MU11: attribution via PRIMARY_USER_EMAIL", () => {
+  const PRIMARY_EMAIL = "primary-mu11@example.com";
+
+  afterEach(async () => {
+    await sql`delete from users`;
+  });
+
+  it("AC-MU11: readings upserted via upsertReading are attributed to the user resolved by looking up PRIMARY_USER_EMAIL in users", async () => {
+    await sql`delete from users`;
+    const [user] = await sql`insert into users (email) values (${PRIMARY_EMAIL}) returning id`;
+    vi.stubEnv("PRIMARY_USER_EMAIL", PRIMARY_EMAIL);
+
+    stubWhoopApi({ recovery: [RECOVERY], sleep: [SLEEP], cycle: [CYCLE], workout: [] });
+    const res = await GET(syncRequest(AUTH));
+    expect(res.status).toBe(200);
+
+    const rows = await sql`select distinct user_id from biometric_readings`;
+    expect(rows).toEqual([{ user_id: user.id }]);
+  });
+});
