@@ -163,7 +163,6 @@ describe("authorized callback — session gate", () => {
  */
 describe("session callback — AC-MU7: session.user.id resolves from the JWT sub claim", () => {
   it("AC-MU7: session.user.id equals the JWT token's sub claim, as a string", () => {
-    // @ts-expect-error session does not exist on lib/auth-callbacks.ts yet — this slice adds it (NFR-70).
     const result = authCallbacksModule.session({
       session: {
         user: { name: "Albert", email: "albert.martinez.90@gmail.com", image: null },
@@ -176,7 +175,6 @@ describe("session callback — AC-MU7: session.user.id resolves from the JWT sub
   });
 
   it("AC-MU7: a different token.sub produces a different session.user.id (not a hardcoded value)", () => {
-    // @ts-expect-error session does not exist on lib/auth-callbacks.ts yet — this slice adds it (NFR-70).
     const result = authCallbacksModule.session({
       session: {
         user: { name: "Friend", email: "friend@example.com", image: null },

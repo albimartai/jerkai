@@ -3,7 +3,7 @@ import Resend from "next-auth/providers/resend";
 import NeonAdapter from "@auth/neon-adapter";
 import { Pool } from "@neondatabase/serverless";
 
-import { authorized, signIn as signInCallback } from "@/lib/auth-callbacks";
+import { authorized, session, signIn as signInCallback } from "@/lib/auth-callbacks";
 
 // Pin production magic links to the canonical domain. Without this, a link
 // requested via a *.vercel.app deployment URL would point back at that URL
@@ -45,6 +45,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth(() => {
     callbacks: {
       authorized,
       signIn: signInCallback,
+      session,
     },
   };
 });
