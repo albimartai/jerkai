@@ -37,7 +37,12 @@ beforeAll(() => {
 let testUserId: number;
 
 beforeEach(async () => {
+  // user_id has no ON DELETE cascade (OQ-3) — manual_macro_entries/daily_targets are cleared
+  // defensively too, since they're shared across the whole test run (fileParallelism: false)
+  // and a stray row left by another integration file would otherwise block `delete from users`.
   await sql`delete from biometric_readings`;
+  await sql`delete from manual_macro_entries`;
+  await sql`delete from daily_targets`;
   await sql`delete from users`;
   const [user] = await sql`insert into users (email) values ('dashboard-read-test@example.com') returning id`;
   testUserId = user.id;

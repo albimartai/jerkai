@@ -37,6 +37,10 @@ beforeAll(() => {
 let testUserId: number;
 
 beforeEach(async () => {
+  // user_id has no ON DELETE cascade (OQ-3) — biometric_readings is cleared defensively too,
+  // since it's shared across the whole test run (fileParallelism: false) and a stray row left
+  // by another integration file would otherwise block `delete from users` with an FK violation.
+  await sql`delete from biometric_readings`;
   await sql`delete from manual_macro_entries`;
   await sql`delete from daily_targets`;
   await sql`delete from users`;

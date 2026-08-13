@@ -99,6 +99,12 @@ beforeAll(async () => {
   }
   vi.stubEnv("HEALTH_EXPORT_SHARED_SECRET", SECRET);
   vi.stubEnv("PRIMARY_USER_EMAIL", PRIMARY_EMAIL);
+  // user_id has no ON DELETE cascade (OQ-3) — every child table is cleared defensively before
+  // users, since these tables are shared across the whole test run (fileParallelism: false)
+  // and a stray row from another integration file would otherwise block this delete.
+  await sql`delete from biometric_readings`;
+  await sql`delete from manual_macro_entries`;
+  await sql`delete from daily_targets`;
   await sql`delete from users`;
   await sql`insert into users (email) values (${PRIMARY_EMAIL})`;
 });
@@ -325,6 +331,9 @@ describe("POST /api/ingest/health — AC-MU10: attribution via PRIMARY_USER_EMAI
   const PRIMARY_EMAIL = "primary-mu10@example.com";
 
   afterEach(async () => {
+    // The happy-path case below lands real rows via POST, tied to the user it creates —
+    // user_id has no ON DELETE cascade (OQ-3), so biometric_readings must clear first.
+    await sql`delete from biometric_readings`;
     await sql`delete from users`;
   });
 
