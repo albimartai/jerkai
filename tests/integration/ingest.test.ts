@@ -79,7 +79,13 @@ async function syncRuns() {
   `;
 }
 
-beforeAll(() => {
+// This pipe has no session (machine-to-machine), so it attributes every row via
+// PRIMARY_USER_EMAIL resolution (NFR-71) — one fixed test user backs every pre-existing
+// test in this file that isn't itself exercising attribution (that's the AC-MU10 block below,
+// which stubs its own PRIMARY_USER_EMAIL values and manages its own users rows).
+const PRIMARY_EMAIL = "ingest-test-primary@example.com";
+
+beforeAll(async () => {
   if (!DATABASE_URL) {
     throw new Error(
       "DATABASE_URL is not set. Integration tests need a disposable Neon branch — see scripts/ci/neon-branch.mjs.",
@@ -92,6 +98,9 @@ beforeAll(() => {
     );
   }
   vi.stubEnv("HEALTH_EXPORT_SHARED_SECRET", SECRET);
+  vi.stubEnv("PRIMARY_USER_EMAIL", PRIMARY_EMAIL);
+  await sql`delete from users`;
+  await sql`insert into users (email) values (${PRIMARY_EMAIL})`;
 });
 
 beforeEach(async () => {
