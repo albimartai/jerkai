@@ -31,12 +31,21 @@ beforeAll(() => {
   }
 });
 
+// Every row in this file is scoped by user_id (NFR-67) — a single test user, recreated fresh
+// every case, backs every pre-existing test that isn't itself exercising multi-user scoping
+// (those live in the AC-MU1/AC-MU2/AC-MU3/AC-MU12 block below, which creates its own users).
+let testUserId: number;
+
 beforeEach(async () => {
   await sql`delete from biometric_readings`;
+  await sql`delete from users`;
+  const [user] = await sql`insert into users (email) values ('dashboard-read-test@example.com') returning id`;
+  testUserId = user.id;
 });
 
 const bodyFat = (readingDate: string, value: number) =>
   upsertReading({
+    userId: testUserId,
     source: "fitdays",
     metric: "body_fat_pct",
     readingDate,
@@ -48,6 +57,7 @@ const bodyFat = (readingDate: string, value: number) =>
 
 const whoopMetric = (metric: string, readingDate: string, value: number, unit: string | null) =>
   upsertReading({
+    userId: testUserId,
     source: "whoop",
     metric,
     readingDate,
@@ -65,7 +75,7 @@ describe("fetchDashboardData — tall-shape join on the shared date key", () => 
     await whoopMetric("recovery_score", "2026-07-16", 72, "%");
     await whoopMetric("hrv", "2026-07-16", 68, "ms");
 
-    const data = await fetchDashboardData(3);
+    const data = await fetchDashboardData(3, testUserId);
 
     // Axis ends at the latest reading day across every dashboard metric.
     expect(data.axis).toEqual(["2026-07-14", "2026-07-15", "2026-07-16"]);
@@ -78,6 +88,7 @@ describe("fetchDashboardData — tall-shape join on the shared date key", () => 
   it("AC-N4: Fitdays weight rows land on the shared axis with their stored unit", async () => {
     await bodyFat("2026-07-15", 18.3);
     await upsertReading({
+      userId: testUserId,
       source: "fitdays",
       metric: "weight",
       readingDate: "2026-07-14",
@@ -87,7 +98,7 @@ describe("fetchDashboardData — tall-shape join on the shared date key", () => 
       rawPayload: { date: "2026-07-14 07:30:00 -0500", qty: 180.4 },
     });
 
-    const data = await fetchDashboardData(2);
+    const data = await fetchDashboardData(2, testUserId);
 
     expect(data.axis).toEqual(["2026-07-14", "2026-07-15"]);
     expect(data.series.weight).toEqual([180.4, null]);
@@ -101,7 +112,7 @@ describe("fetchDashboardData — tall-shape join on the shared date key", () => 
     await bodyFat("2026-07-15", 18.3);
     await bodyFat("2026-07-16", 18.2);
 
-    const data = await fetchDashboardData(2);
+    const data = await fetchDashboardData(2, testUserId);
 
     expect(data.axis).toEqual(["2026-07-15", "2026-07-16"]);
     expect(data.series.bodyFatPct).toEqual([18.3, 18.2]);
@@ -114,7 +125,7 @@ describe("fetchDashboardData — idempotent read path (NFR-3)", () => {
     // The scale re-sends the day after a recalibration: same key, new value.
     await bodyFat("2026-07-16", 18.2);
 
-    const data = await fetchDashboardData(1);
+    const data = await fetchDashboardData(1, testUserId);
 
     expect(data.axis).toEqual(["2026-07-16"]);
     // One slot, one value — the latest. A duplicate point would surface as
@@ -129,6 +140,7 @@ describe("fetchDashboardData — idempotent read path (NFR-3)", () => {
     ];
     const send = () =>
       upsertReading({
+        userId: testUserId,
         source: "fitdays",
         metric: "body_fat_pct", // stand-in metric: the merge machinery is metric-agnostic
         readingDate: "2026-07-16",
@@ -140,7 +152,7 @@ describe("fetchDashboardData — idempotent read path (NFR-3)", () => {
     await send();
     await send(); // full re-send of the identical day
 
-    const data = await fetchDashboardData(1);
+    const data = await fetchDashboardData(1, testUserId);
 
     // 7500, not 15000: the merge replaced sample-for-sample by timestamp.
     expect(data.series.bodyFatPct).toEqual([7500]);
@@ -162,6 +174,7 @@ async function createUser(email: string): Promise<number> {
 
 const bodyFatFor = (userId: number, readingDate: string, value: number) =>
   upsertReading({
+    userId,
     source: "fitdays",
     metric: "body_fat_pct",
     readingDate,
@@ -169,21 +182,14 @@ const bodyFatFor = (userId: number, readingDate: string, value: number) =>
     unit: "%",
     aggregation: "latest",
     rawPayload: { date: `${readingDate} 07:30:00 -0500`, qty: value },
-    // @ts-expect-error userId does not exist on UpsertableReading yet — this slice adds it (NFR-67).
-    userId,
   });
 
 describe("fetchDashboardData — per-user scoping (AC-MU1/AC-MU2/AC-MU3/AC-MU12)", () => {
-  beforeEach(async () => {
-    await sql`delete from users`;
-  });
-
   it("AC-MU1: a user with zero readings of their own sees an empty axis, even when another user has readings", async () => {
     const otherUserId = await createUser("other-mu1@example.com");
     const userId = await createUser("me-mu1@example.com");
     await bodyFatFor(otherUserId, "2026-07-14", 18.4);
 
-    // @ts-expect-error fetchDashboardData does not take a userId yet — this slice adds it.
     const data = await fetchDashboardData(7, userId);
 
     expect(data.axis).toEqual([]);
@@ -196,9 +202,7 @@ describe("fetchDashboardData — per-user scoping (AC-MU1/AC-MU2/AC-MU3/AC-MU12)
     await bodyFatFor(userA, "2026-07-16", 18.2);
     await bodyFatFor(userB, "2026-07-16", 22.7);
 
-    // @ts-expect-error fetchDashboardData does not take a userId yet — this slice adds it.
     const dataA = await fetchDashboardData(1, userA);
-    // @ts-expect-error fetchDashboardData does not take a userId yet — this slice adds it.
     const dataB = await fetchDashboardData(1, userB);
 
     expect(dataA.series.bodyFatPct).toEqual([18.2]);
@@ -211,7 +215,6 @@ describe("fetchDashboardData — per-user scoping (AC-MU1/AC-MU2/AC-MU3/AC-MU12)
     await bodyFatFor(userA, "2026-07-10", 18.0);
     await bodyFatFor(userB, "2026-07-20", 22.0); // more recent, but belongs to userB
 
-    // @ts-expect-error fetchDashboardData does not take a userId yet — this slice adds it.
     const dataA = await fetchDashboardData(3, userA);
 
     expect(dataA.latestDay).toBe("2026-07-10");
@@ -223,7 +226,6 @@ describe("fetchDashboardData — per-user scoping (AC-MU1/AC-MU2/AC-MU3/AC-MU12)
     await bodyFatFor(userId, "2026-07-14", 18.4);
     await bodyFatFor(userId, "2026-07-16", 18.2);
 
-    // @ts-expect-error fetchDashboardData does not take a userId yet — this slice adds it.
     const data = await fetchDashboardData(3, userId);
 
     expect(data.axis).toEqual(["2026-07-14", "2026-07-15", "2026-07-16"]);
@@ -236,7 +238,7 @@ describe("fetchDashboardData — empty and partial states (AC-D13, NFR-8)", () =
     await bodyFat("2026-07-13", 18.6);
     await bodyFat("2026-07-16", 18.2);
 
-    const data = await fetchDashboardData(4);
+    const data = await fetchDashboardData(4, testUserId);
 
     expect(data.series.bodyFatPct).toEqual([18.6, null, null, 18.2]);
     expect(data.series.bodyFatPct).not.toContain(0);
@@ -245,7 +247,7 @@ describe("fetchDashboardData — empty and partial states (AC-D13, NFR-8)", () =
   });
 
   it("NFR-8: an empty database yields an empty axis and no error", async () => {
-    const data = await fetchDashboardData(30);
+    const data = await fetchDashboardData(30, testUserId);
 
     expect(data.latestDay).toBeNull();
     expect(data.axis).toEqual([]);
@@ -256,7 +258,7 @@ describe("fetchDashboardData — empty and partial states (AC-D13, NFR-8)", () =
     await whoopMetric("sleep_duration", "2026-07-16", 7.4, "hr");
     await bodyFat("2026-07-16", 18.2);
 
-    const data = await fetchDashboardData(1);
+    const data = await fetchDashboardData(1, testUserId);
 
     expect(data.units.sleepDuration).toBe("hr");
     expect(data.units.bodyFatPct).toBe("%");

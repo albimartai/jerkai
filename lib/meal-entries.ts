@@ -24,6 +24,7 @@ export type MealEntryRow = {
 };
 
 export type NewMealEntry = {
+  userId: number;
   mealType: MealType;
   entryDate: string;
   description: string | null;
@@ -44,8 +45,8 @@ export async function saveMealEntry(entry: NewMealEntry): Promise<void> {
   const sql = getSql();
   await sql`
     insert into manual_macro_entries
-      (meal_type, entry_date, description, calories, protein_g, carbs_g, fat_g, idempotency_key)
-    values (${entry.mealType}, ${entry.entryDate}, ${entry.description}, ${entry.calories},
+      (user_id, meal_type, entry_date, description, calories, protein_g, carbs_g, fat_g, idempotency_key)
+    values (${entry.userId}, ${entry.mealType}, ${entry.entryDate}, ${entry.description}, ${entry.calories},
             ${entry.proteinG}, ${entry.carbsG}, ${entry.fatG}, ${entry.idempotencyKey})
     on conflict (idempotency_key) do nothing
   `;
@@ -88,12 +89,12 @@ const MEAL_ENTRY_COLUMNS = `
   carbs_g::float8 as carbs_g, fat_g::float8 as fat_g, created_at, updated_at
 `;
 
-export async function fetchMealEntriesForDate(entryDate: string): Promise<MealEntryRow[]> {
+export async function fetchMealEntriesForDate(entryDate: string, userId: number): Promise<MealEntryRow[]> {
   const sql = getSql();
   const rows = (await sql`
     select ${sql.unsafe(MEAL_ENTRY_COLUMNS)}
     from manual_macro_entries
-    where entry_date = ${entryDate}
+    where entry_date = ${entryDate} and user_id = ${userId}
     order by created_at
   `) as MealEntryDbRow[];
   return rows.map(toMealEntryRow);
@@ -101,6 +102,7 @@ export async function fetchMealEntriesForDate(entryDate: string): Promise<MealEn
 
 export type EditedMealEntry = {
   id: number;
+  userId: number;
   mealType: MealType;
   entryDate: string;
   description: string | null;
@@ -117,13 +119,15 @@ export type UpdateMealEntryResult =
 // In-place update (AC-M18, DL-2026-07-20-b2 — never delete-and-re-add): same id, same
 // idempotency_key, created_at untouched. AC-M20: a no-op save (identical values resubmitted)
 // must not bump updated_at, so the incoming values are compared against the stored row
-// first and updated_at is only touched when something actually changed.
+// first and updated_at is only touched when something actually changed. Scoped by id AND
+// user_id throughout (AC-MU5): another user's id lookup reads/writes nothing, indistinguishable
+// from the id not existing at all.
 export async function updateMealEntry(edit: EditedMealEntry): Promise<UpdateMealEntryResult> {
   const sql = getSql();
   const existingRows = (await sql`
     select ${sql.unsafe(MEAL_ENTRY_COLUMNS)}
     from manual_macro_entries
-    where id = ${edit.id}
+    where id = ${edit.id} and user_id = ${edit.userId}
   `) as MealEntryDbRow[];
   if (existingRows.length === 0) return { ok: false, reason: "not_found" };
 
@@ -149,7 +153,7 @@ export async function updateMealEntry(edit: EditedMealEntry): Promise<UpdateMeal
         carbs_g = ${edit.carbsG},
         fat_g = ${edit.fatG},
         updated_at = now()
-    where id = ${edit.id}
+    where id = ${edit.id} and user_id = ${edit.userId}
     returning ${sql.unsafe(MEAL_ENTRY_COLUMNS)}
   `) as MealEntryDbRow[];
   return { ok: true, entry: toMealEntryRow(rows[0]) };
@@ -159,12 +163,13 @@ export type DeleteMealEntryResult = { deleted: boolean; entry: MealEntryRow | nu
 
 // Hard delete (DL-2026-07-20-b1). Idempotent by nature — deleting an already-absent id is
 // not an error (NFR-37: delete-then-delete must never 500), the caller just learns nothing
-// was there to remove.
-export async function deleteMealEntry(id: number): Promise<DeleteMealEntryResult> {
+// was there to remove. Scoped by id AND user_id (AC-MU5): another user's id is indistinguishable
+// from an id that never existed.
+export async function deleteMealEntry(id: number, userId: number): Promise<DeleteMealEntryResult> {
   const sql = getSql();
   const rows = (await sql`
     delete from manual_macro_entries
-    where id = ${id}
+    where id = ${id} and user_id = ${userId}
     returning ${sql.unsafe(MEAL_ENTRY_COLUMNS)}
   `) as MealEntryDbRow[];
   return rows.length > 0 ? { deleted: true, entry: toMealEntryRow(rows[0]) } : { deleted: false, entry: null };
@@ -194,13 +199,16 @@ export function dailyTotals(entries: readonly MealEntryRow[]): DailyTotals {
 
 // Daily calorie sums for the strip's axis (AC-M6). A day with zero entries is a null gap
 // (AC-M8), never a zero — same gap convention as lib/dashboard/series.ts's alignSeries.
-export async function fetchDailyCalorieTotals(axis: readonly string[]): Promise<(number | null)[]> {
+export async function fetchDailyCalorieTotals(
+  axis: readonly string[],
+  userId: number,
+): Promise<(number | null)[]> {
   if (axis.length === 0) return [];
   const sql = getSql();
   const rows = (await sql`
     select to_char(entry_date, 'YYYY-MM-DD') as entry_date, sum(calories)::float8 as total
     from manual_macro_entries
-    where entry_date >= ${axis[0]} and entry_date <= ${axis[axis.length - 1]}
+    where entry_date >= ${axis[0]} and entry_date <= ${axis[axis.length - 1]} and user_id = ${userId}
     group by entry_date
   `) as { entry_date: string; total: number }[];
 
@@ -214,7 +222,8 @@ export async function fetchDailyCalorieTotals(axis: readonly string[]): Promise<
 export async function fetchCalorieSeries(
   axis: readonly string[],
   targets: readonly TargetRow[],
+  userId: number,
 ): Promise<CalorieDay[]> {
-  const dailyCalories = await fetchDailyCalorieTotals(axis);
+  const dailyCalories = await fetchDailyCalorieTotals(axis, userId);
   return buildCalorieSeries(axis, dailyCalories, targets);
 }

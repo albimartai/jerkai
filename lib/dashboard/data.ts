@@ -34,7 +34,7 @@ const keyBySourceMetric = new Map<string, DashboardMetricKey>(
   }),
 );
 
-export async function fetchDashboardData(windowDays: number): Promise<DashboardData> {
+export async function fetchDashboardData(windowDays: number, userId: number): Promise<DashboardData> {
   const sql = getSql();
 
   const sources = METRIC_KEYS.map((key) => DASHBOARD_METRICS[key].source);
@@ -43,14 +43,18 @@ export async function fetchDashboardData(windowDays: number): Promise<DashboardD
   // The axis ends at the newest reading day across the dashboard metrics
   // (not the server clock, which runs in UTC and would disagree with the
   // device-local date key around midnight). One query: the subselect finds
-  // that day, the outer filter keeps the trailing window.
+  // that day, the outer filter keeps the trailing window. The CTE itself is
+  // scoped by user_id (NFR-68) — scoping only the outer select would still
+  // let another user's more recent reading shift this user's axis end date,
+  // because the axis-end subquery reads from this same CTE.
   const rows = (await sql`
     with dashboard_rows as (
       select source, metric, reading_date, value, unit
       from biometric_readings
-      where (source, metric) in (
-        select * from unnest(${sources}::text[], ${metrics}::text[])
-      )
+      where user_id = ${userId}
+        and (source, metric) in (
+          select * from unnest(${sources}::text[], ${metrics}::text[])
+        )
     )
     select source, metric,
            to_char(reading_date, 'YYYY-MM-DD') as reading_date,
