@@ -152,7 +152,7 @@ export async function GET(request: Request): Promise<Response> {
     primaryUserId = await resolvePrimaryUserId();
   } catch (err) {
     console.error("whoop sync rejected:", err instanceof Error ? err.message : err);
-    return Response.json({ error: "server is not configured for whoop sync" }, { status: 500 });
+    return syncFailed(startedAt, `primary user resolution failed: ${message(err)}`);
   }
 
   const window = resolveWindow(new URL(request.url).searchParams);
