@@ -381,6 +381,14 @@ describe("POST /api/ingest/health — AC-MU10: attribution via PRIMARY_USER_EMAI
  * Editing stubs to fit implementation triggers a blocking finding in jerkai-falsify-diff.
  */
 describe("POST /api/ingest/health — AC-PUE2/AC-PUE3: resolvePrimaryUserId failure alerting", () => {
+  // The AC-MU10 block above deletes every `users` row in its own afterEach and never
+  // restores the fixture user beforeAll inserted — reinsert it here so this block's own
+  // preconditions don't depend on what a sibling block leaves behind.
+  beforeEach(async () => {
+    await sql`delete from users`;
+    await sql`insert into users (email) values (${PRIMARY_EMAIL})`;
+  });
+
   it("AC-PUE2: records a sync_runs failure row for every HEALTH_EXPORT_SOURCES source and alerts once when PRIMARY_USER_EMAIL is unset", async () => {
     vi.stubEnv("PRIMARY_USER_EMAIL", "");
     const res = await POST(ingestRequest(JSON.stringify(fullPayload), SECRET));

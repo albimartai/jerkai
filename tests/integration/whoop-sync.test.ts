@@ -396,6 +396,14 @@ describe("GET /api/whoop/sync — AC-MU11: attribution via PRIMARY_USER_EMAIL", 
  * Editing stubs to fit implementation triggers a blocking finding in jerkai-falsify-diff.
  */
 describe("GET /api/whoop/sync — AC-PUE1/AC-PUE3: resolvePrimaryUserId failure alerting", () => {
+  // The AC-MU11 block above deletes every `users` row in its own afterEach and never
+  // restores the fixture user beforeAll inserted — reinsert it here so this block's own
+  // preconditions don't depend on what a sibling block leaves behind.
+  beforeEach(async () => {
+    await sql`delete from users`;
+    await sql`insert into users (email) values (${PRIMARY_EMAIL})`;
+  });
+
   it("AC-PUE1: records a whoop sync_runs failure row and alerts once when PRIMARY_USER_EMAIL is unset", async () => {
     vi.stubEnv("PRIMARY_USER_EMAIL", "");
     const res = await GET(syncRequest(AUTH));
