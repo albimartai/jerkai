@@ -151,8 +151,9 @@ export async function GET(request: Request): Promise<Response> {
   try {
     primaryUserId = await resolvePrimaryUserId();
   } catch (err) {
-    console.error("whoop sync rejected:", err instanceof Error ? err.message : err);
-    return syncFailed(startedAt, `primary user resolution failed: ${message(err)}`);
+    const reason = message(err);
+    console.error("whoop sync rejected:", reason);
+    return syncFailed(startedAt, `primary user resolution failed: ${reason}`);
   }
 
   const window = resolveWindow(new URL(request.url).searchParams);

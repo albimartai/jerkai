@@ -380,8 +380,8 @@ describe("POST /api/ingest/health — AC-MU10: attribution via PRIMARY_USER_EMAI
  * Implementation code must be written to satisfy these stubs.
  * Editing stubs to fit implementation triggers a blocking finding in jerkai-falsify-diff.
  */
-describe("POST /api/ingest/health — AC-PUE-2/AC-PUE-3: resolvePrimaryUserId failure alerting", () => {
-  it("AC-PUE-2: records a sync_runs failure row for every HEALTH_EXPORT_SOURCES source and alerts once when PRIMARY_USER_EMAIL is unset", async () => {
+describe("POST /api/ingest/health — AC-PUE2/AC-PUE3: resolvePrimaryUserId failure alerting", () => {
+  it("AC-PUE2: records a sync_runs failure row for every HEALTH_EXPORT_SOURCES source and alerts once when PRIMARY_USER_EMAIL is unset", async () => {
     vi.stubEnv("PRIMARY_USER_EMAIL", "");
     const res = await POST(ingestRequest(JSON.stringify(fullPayload), SECRET));
     expect(res.status).toBe(500);
@@ -396,7 +396,7 @@ describe("POST /api/ingest/health — AC-PUE-2/AC-PUE-3: resolvePrimaryUserId fa
     vi.stubEnv("PRIMARY_USER_EMAIL", PRIMARY_EMAIL);
   });
 
-  it("AC-PUE-3: happy-path response status/shape is unchanged when PRIMARY_USER_EMAIL resolves correctly", async () => {
+  it("AC-PUE3: happy-path response status/shape is unchanged when PRIMARY_USER_EMAIL resolves correctly", async () => {
     const res = await POST(ingestRequest(JSON.stringify(fullPayload), SECRET));
     const body = await res.json();
 

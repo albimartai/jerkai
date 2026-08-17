@@ -395,8 +395,8 @@ describe("GET /api/whoop/sync — AC-MU11: attribution via PRIMARY_USER_EMAIL", 
  * Implementation code must be written to satisfy these stubs.
  * Editing stubs to fit implementation triggers a blocking finding in jerkai-falsify-diff.
  */
-describe("GET /api/whoop/sync — AC-PUE-1/AC-PUE-3: resolvePrimaryUserId failure alerting", () => {
-  it("AC-PUE-1: records a whoop sync_runs failure row and alerts once when PRIMARY_USER_EMAIL is unset", async () => {
+describe("GET /api/whoop/sync — AC-PUE1/AC-PUE3: resolvePrimaryUserId failure alerting", () => {
+  it("AC-PUE1: records a whoop sync_runs failure row and alerts once when PRIMARY_USER_EMAIL is unset", async () => {
     vi.stubEnv("PRIMARY_USER_EMAIL", "");
     const res = await GET(syncRequest(AUTH));
     expect(res.status).toBe(500);
@@ -411,7 +411,7 @@ describe("GET /api/whoop/sync — AC-PUE-1/AC-PUE-3: resolvePrimaryUserId failur
     vi.stubEnv("PRIMARY_USER_EMAIL", PRIMARY_EMAIL);
   });
 
-  it("AC-PUE-3: happy-path response status/shape is unchanged when PRIMARY_USER_EMAIL resolves correctly", async () => {
+  it("AC-PUE3: happy-path response status/shape is unchanged when PRIMARY_USER_EMAIL resolves correctly", async () => {
     stubWhoopApi({ recovery: [RECOVERY], sleep: [SLEEP], cycle: [CYCLE], workout: [WORKOUT] });
     const res = await GET(syncRequest(AUTH));
     const body = await res.json();
