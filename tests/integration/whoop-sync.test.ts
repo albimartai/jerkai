@@ -386,3 +386,43 @@ describe("GET /api/whoop/sync — AC-MU11: attribution via PRIMARY_USER_EMAIL", 
     expect(rows).toEqual([{ user_id: user.id }]);
   });
 });
+
+/**
+ * AUTO-GENERATED TEST STUB — JerkAI Contract
+ * PRD Target: JerkAI — Build PRD: Restore PRIMARY_USER_EMAIL + Close the Alert-on-Config-Failure Gap
+ *
+ * DO NOT EDIT test names, AC IDs, or stub assertions during implementation.
+ * Implementation code must be written to satisfy these stubs.
+ * Editing stubs to fit implementation triggers a blocking finding in jerkai-falsify-diff.
+ */
+describe("GET /api/whoop/sync — AC-PUE-1/AC-PUE-3: resolvePrimaryUserId failure alerting", () => {
+  it("AC-PUE-1: records a whoop sync_runs failure row and alerts once when PRIMARY_USER_EMAIL is unset", async () => {
+    vi.stubEnv("PRIMARY_USER_EMAIL", "");
+    const res = await GET(syncRequest(AUTH));
+    expect(res.status).toBe(500);
+
+    const runs = await sql`select source, status, error_message from sync_runs`;
+    expect(runs).toHaveLength(1);
+    expect(runs[0].source).toBe("whoop");
+    expect(runs[0].status).toBe("failure");
+    expect(runs[0].error_message).toContain("PRIMARY_USER_EMAIL");
+    expect(sendSyncFailureAlert).toHaveBeenCalledTimes(1);
+
+    vi.stubEnv("PRIMARY_USER_EMAIL", PRIMARY_EMAIL);
+  });
+
+  it("AC-PUE-3: happy-path response status/shape is unchanged when PRIMARY_USER_EMAIL resolves correctly", async () => {
+    stubWhoopApi({ recovery: [RECOVERY], sleep: [SLEEP], cycle: [CYCLE], workout: [WORKOUT] });
+    const res = await GET(syncRequest(AUTH));
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.status).toBe("success");
+    expect(body).toHaveProperty("window");
+    expect(body).toHaveProperty("rowsSynced");
+    expect(body).toHaveProperty("counts");
+    expect(body).toHaveProperty("skipped");
+    expect(body).toHaveProperty("errors");
+    expect(sendSyncFailureAlert).not.toHaveBeenCalled();
+  });
+});

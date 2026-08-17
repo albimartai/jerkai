@@ -371,3 +371,41 @@ describe("POST /api/ingest/health — AC-MU10: attribution via PRIMARY_USER_EMAI
     expect(await readingRows()).toEqual([]);
   });
 });
+
+/**
+ * AUTO-GENERATED TEST STUB — JerkAI Contract
+ * PRD Target: JerkAI — Build PRD: Restore PRIMARY_USER_EMAIL + Close the Alert-on-Config-Failure Gap
+ *
+ * DO NOT EDIT test names, AC IDs, or stub assertions during implementation.
+ * Implementation code must be written to satisfy these stubs.
+ * Editing stubs to fit implementation triggers a blocking finding in jerkai-falsify-diff.
+ */
+describe("POST /api/ingest/health — AC-PUE-2/AC-PUE-3: resolvePrimaryUserId failure alerting", () => {
+  it("AC-PUE-2: records a sync_runs failure row for every HEALTH_EXPORT_SOURCES source and alerts once when PRIMARY_USER_EMAIL is unset", async () => {
+    vi.stubEnv("PRIMARY_USER_EMAIL", "");
+    const res = await POST(ingestRequest(JSON.stringify(fullPayload), SECRET));
+    expect(res.status).toBe(500);
+
+    const runs = await syncRuns();
+    expect(runs).toHaveLength(1);
+    expect(runs[0].source).toBe("fitdays");
+    expect(runs[0].status).toBe("failure");
+    expect(runs[0].error_message).toContain("PRIMARY_USER_EMAIL");
+    expect(sendSyncFailureAlert).toHaveBeenCalledTimes(1);
+
+    vi.stubEnv("PRIMARY_USER_EMAIL", PRIMARY_EMAIL);
+  });
+
+  it("AC-PUE-3: happy-path response status/shape is unchanged when PRIMARY_USER_EMAIL resolves correctly", async () => {
+    const res = await POST(ingestRequest(JSON.stringify(fullPayload), SECRET));
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.status).toBe("success");
+    expect(body.sources).toEqual({
+      fitdays: { status: "success", rowsSynced: 4, errorMessage: null },
+    });
+    expect(body.ignoredMetrics).toEqual([]);
+    expect(sendSyncFailureAlert).not.toHaveBeenCalled();
+  });
+});
