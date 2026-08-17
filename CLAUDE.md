@@ -2,7 +2,7 @@
 @docs/context.md
 @docs/definition-of-ready-and-done.md
 @docs/prd/extend-signin-allowlist.md
-@docs/prd/multi-user-data-model-retrofit.md
+@docs/prd/primary-user-email-alert-gap.md
 
 <!--
 Shipped Build PRDs are NOT imported here. They live at docs/prd/ (and docs/prd/archive/

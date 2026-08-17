@@ -66,7 +66,9 @@ export async function POST(request: Request): Promise<Response> {
   try {
     primaryUserId = await resolvePrimaryUserId();
   } catch (err) {
-    console.error("ingest rejected:", err instanceof Error ? err.message : err);
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("ingest rejected:", message);
+    await recordRejectedRequest(startedAt, `primary user resolution failed: ${message}`);
     return Response.json({ error: "server is not configured for ingest" }, { status: 500 });
   }
 
