@@ -1,10 +1,9 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 
 import { sendSyncFailureAlert } from "@/lib/alerts";
-import { resolvePrimaryUserId } from "@/lib/primary-user";
+import { getSql } from "@/lib/db";
 import { upsertReading } from "@/lib/readings";
 import { recordSyncRun, type SyncOutcome } from "@/lib/sync-runs";
-import { getSql } from "@/lib/db";
 import {
   fetchCollection,
   fetchSleepById,
@@ -16,7 +15,7 @@ import {
   type WhoopWorkout,
 } from "@/lib/whoop-api";
 import { mapWhoopData, mapWhoopWorkouts, type WhoopWorkoutRow } from "@/lib/whoop-map";
-import { getFreshAccessToken } from "@/lib/whoop-oauth";
+import { getFreshAccessToken, listConnectedUsers } from "@/lib/whoop-oauth";
 
 // The Whoop pull pipe. Whoop's API has no push equivalent of Health Auto
 // Export, so a Vercel Cron job (vercel.json) invokes this route daily.
@@ -27,13 +26,22 @@ import { getFreshAccessToken } from "@/lib/whoop-oauth";
 // invocations carry no session cookie and do not follow redirects, so the
 // Auth.js 307-to-/signin would silently kill every run.
 //
+// Whoop Multi-Tenancy (§0/NFR-77/NFR-79/NFR-80): loops once per row in
+// whoop_tokens via listConnectedUsers() — that table is the sole source of
+// truth for "which users, and which user owns this pull." PRIMARY_USER_EMAIL/
+// resolvePrimaryUserId() is retired from this path entirely; a connected
+// user's failure (token refresh, Whoop API call, a bad record) is recorded
+// and alerted independently and never blocks or misattributes another
+// connected user's sync in the same run.
+//
 // Default window: the last 7 days, re-upserted in full — idempotent, so a
 // missed or doubled cron run (both explicitly possible per Vercel's docs)
 // self-heals, and late re-scores inside the window update in place. The
 // window is overridable (?start=YYYY-MM-DD&end=YYYY-MM-DD) with the same
 // bearer auth, which is how the historical backfill runs: chunked date
 // ranges (~90 days each, to stay inside function-duration and Whoop
-// rate limits), safe to re-run over any overlapping range.
+// rate limits), safe to re-run over any overlapping range. Applied uniformly
+// to every connected user in the run.
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -114,18 +122,19 @@ async function pullAll(accessToken: string, window: { start: string; end: string
   return { recoveries, sleeps, cycles, workouts };
 }
 
-async function upsertWorkout(row: WhoopWorkoutRow): Promise<void> {
+async function upsertWorkout(userId: number, row: WhoopWorkoutRow): Promise<void> {
   const sql = getSql();
   await sql`
-    insert into whoop_workouts (id, reading_date, sport_name, start_time, end_time,
+    insert into whoop_workouts (id, user_id, reading_date, sport_name, start_time, end_time,
                                 timezone_offset, score_state, strain, average_heart_rate,
                                 max_heart_rate, kilojoule, raw_payload)
-    values (${row.workoutId}, ${row.readingDate}, ${row.sportName}, ${row.startTime},
+    values (${row.workoutId}, ${userId}, ${row.readingDate}, ${row.sportName}, ${row.startTime},
             ${row.endTime}, ${row.timezoneOffset}, ${row.scoreState}, ${row.strain},
             ${row.averageHeartRate}, ${row.maxHeartRate}, ${row.kilojoule},
             ${JSON.stringify(row.rawPayload)}::jsonb)
     on conflict (id)
-    do update set reading_date = excluded.reading_date,
+    do update set user_id = excluded.user_id,
+                  reading_date = excluded.reading_date,
                   sport_name = excluded.sport_name,
                   start_time = excluded.start_time,
                   end_time = excluded.end_time,
@@ -140,41 +149,71 @@ async function upsertWorkout(row: WhoopWorkoutRow): Promise<void> {
   `;
 }
 
-export async function GET(request: Request): Promise<Response> {
-  const startedAt = new Date();
+type UserSyncResult = {
+  userId: number;
+  email: string;
+  status: SyncOutcome["status"];
+  rowsSynced: number;
+  counts: { recoveries: number; sleeps: number; cycles: number; workouts: number };
+  skipped: string[];
+  errors: string[];
+};
 
-  if (!isAuthorized(request)) {
-    return Response.json({ error: "unauthorized" }, { status: 401 });
-  }
+function message(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
 
-  let primaryUserId: number;
+// A run that dies before any row lands for this user (refresh failure, API
+// outage) is a whole-lane failure for that user only: one sync_runs failure
+// row + one alert naming them, never affecting any other connected user's
+// outcome in the same run (AC-WT3, NFR-79).
+async function userSyncFailed(
+  userId: number,
+  email: string,
+  startedAt: Date,
+  reason: string,
+): Promise<UserSyncResult> {
   try {
-    primaryUserId = await resolvePrimaryUserId();
+    await recordSyncRun("whoop", userId, startedAt, {
+      status: "failure",
+      rowsSynced: 0,
+      errorMessage: reason,
+    });
   } catch (err) {
-    const reason = message(err);
-    console.error("whoop sync rejected:", reason);
-    return syncFailed(startedAt, `primary user resolution failed: ${reason}`);
+    console.error(`failed to record sync_runs row for whoop (user ${userId}):`, err);
   }
+  await sendSyncFailureAlert(
+    `JerkAI sync failure: whoop (${email})`,
+    `The Whoop sync run for ${email} failed.\n\nReason: ${reason}\nTime: ${new Date().toISOString()}\n\nSee jerkai.app/status for last-successful-sync state.`,
+  );
+  return {
+    userId,
+    email,
+    status: "failure",
+    rowsSynced: 0,
+    counts: { recoveries: 0, sleeps: 0, cycles: 0, workouts: 0 },
+    skipped: [],
+    errors: [reason],
+  };
+}
 
-  const window = resolveWindow(new URL(request.url).searchParams);
-  if (!window) {
-    return Response.json(
-      { error: "invalid window: expected ?start=YYYY-MM-DD&end=YYYY-MM-DD with start < end" },
-      { status: 400 },
-    );
-  }
-
-  // Never connected (no token row) is an expected pre-connection state, not
-  // a sync failure — no sync_runs row, no alert, or the daily cron would
-  // page about a connection that simply hasn't been made yet.
+async function syncOneUser(
+  userId: number,
+  email: string,
+  window: { start: string; end: string },
+  startedAt: Date,
+): Promise<UserSyncResult> {
   let accessToken: string | null;
   try {
-    accessToken = await getFreshAccessToken();
+    accessToken = await getFreshAccessToken(userId);
   } catch (err) {
-    return syncFailed(startedAt, `token refresh failed: ${message(err)}`);
+    return userSyncFailed(userId, email, startedAt, `token refresh failed: ${message(err)}`);
   }
   if (!accessToken) {
-    return Response.json({ status: "not_connected", hint: "visit /api/whoop/connect" });
+    // listConnectedUsers() only returns rows that already have a
+    // whoop_tokens row, so this should not happen in practice — treated as
+    // a failure rather than silently skipped if it ever does.
+    return userSyncFailed(userId, email, startedAt, "token row disappeared during sync");
   }
 
   let pull: WhoopPull;
@@ -185,14 +224,19 @@ export async function GET(request: Request): Promise<Response> {
     // one forced refresh + retry on 401 (clock skew, out-of-band revocation).
     if (err instanceof WhoopApiError && err.status === 401) {
       try {
-        accessToken = await getFreshAccessToken({ forceRefresh: true });
+        accessToken = await getFreshAccessToken(userId, { forceRefresh: true });
         if (!accessToken) throw new Error("token row disappeared during retry");
         pull = await pullAll(accessToken, window);
       } catch (retryErr) {
-        return syncFailed(startedAt, `Whoop API pull failed after token retry: ${message(retryErr)}`);
+        return userSyncFailed(
+          userId,
+          email,
+          startedAt,
+          `Whoop API pull failed after token retry: ${message(retryErr)}`,
+        );
       }
     } else {
-      return syncFailed(startedAt, `Whoop API pull failed: ${message(err)}`);
+      return userSyncFailed(userId, email, startedAt, `Whoop API pull failed: ${message(err)}`);
     }
   }
 
@@ -200,14 +244,14 @@ export async function GET(request: Request): Promise<Response> {
   const mappedWorkouts = mapWhoopWorkouts(pull.workouts);
   const skipped = [...mapped.skipped, ...mappedWorkouts.skipped];
 
-  // Land rows one by one so a single bad record degrades the run to
+  // Land rows one by one so a single bad record degrades this user's run to
   // 'partial' instead of discarding the batch — same shape as the ingest
-  // route.
+  // route, scoped to this user only.
   let synced = 0;
   const errors: string[] = [];
   for (const reading of mapped.readings) {
     try {
-      await upsertReading({ ...reading, userId: primaryUserId });
+      await upsertReading({ ...reading, userId });
       synced += 1;
     } catch (err) {
       errors.push(`${reading.metric} (${reading.readingDate}): ${message(err)}`);
@@ -215,7 +259,7 @@ export async function GET(request: Request): Promise<Response> {
   }
   for (const workout of mappedWorkouts.workouts) {
     try {
-      await upsertWorkout(workout);
+      await upsertWorkout(userId, workout);
       synced += 1;
     } catch (err) {
       errors.push(`workout ${workout.workoutId} (${workout.readingDate}): ${message(err)}`);
@@ -228,55 +272,73 @@ export async function GET(request: Request): Promise<Response> {
     errorMessage: errors.length > 0 ? errors.join("; ") : null,
   };
   try {
-    await recordSyncRun("whoop", startedAt, outcome);
+    await recordSyncRun("whoop", userId, startedAt, outcome);
   } catch (err) {
-    console.error("failed to record sync_runs row for whoop:", err);
+    console.error(`failed to record sync_runs row for whoop (user ${userId}):`, err);
   }
 
   if (outcome.status !== "success") {
     await sendSyncFailureAlert(
-      `JerkAI sync ${outcome.status === "partial" ? "partial failure" : "failure"}: whoop`,
-      `A Whoop sync run completed with errors.\n\n${outcome.errorMessage}\nTime: ${new Date().toISOString()}\n\nSee jerkai.app/status for last-successful-sync state.`,
+      `JerkAI sync ${outcome.status === "partial" ? "partial failure" : "failure"}: whoop (${email})`,
+      `A Whoop sync run for ${email} completed with errors.\n\n${outcome.errorMessage}\nTime: ${new Date().toISOString()}\n\nSee jerkai.app/status for last-successful-sync state.`,
     );
   }
 
+  return {
+    userId,
+    email,
+    status: outcome.status,
+    rowsSynced: synced,
+    counts: {
+      recoveries: pull.recoveries.length,
+      sleeps: pull.sleeps.length,
+      cycles: pull.cycles.length,
+      workouts: pull.workouts.length,
+    },
+    skipped,
+    errors,
+  };
+}
+
+function aggregateStatus(results: UserSyncResult[]): SyncOutcome["status"] {
+  if (results.length === 0) return "success"; // AC-WT1: zero connections is a legitimate empty run
+  if (results.every((r) => r.status === "success")) return "success";
+  if (results.every((r) => r.status === "failure")) return "failure";
+  return "partial";
+}
+
+export async function GET(request: Request): Promise<Response> {
+  const startedAt = new Date();
+
+  if (!isAuthorized(request)) {
+    return Response.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  const window = resolveWindow(new URL(request.url).searchParams);
+  if (!window) {
+    return Response.json(
+      { error: "invalid window: expected ?start=YYYY-MM-DD&end=YYYY-MM-DD with start < end" },
+      { status: 400 },
+    );
+  }
+
+  const connectedUsers = await listConnectedUsers();
+  const results: UserSyncResult[] = [];
+  for (const { userId, email } of connectedUsers) {
+    results.push(await syncOneUser(userId, email, window, startedAt));
+  }
+
+  const status = aggregateStatus(results);
   return Response.json(
     {
-      status: outcome.status,
+      status,
       window,
-      rowsSynced: synced,
-      counts: {
-        recoveries: pull.recoveries.length,
-        sleeps: pull.sleeps.length,
-        cycles: pull.cycles.length,
-        workouts: pull.workouts.length,
-      },
-      skipped,
-      errors,
+      usersProcessed: results.length,
+      rowsSynced: results.reduce((sum, r) => sum + r.rowsSynced, 0),
+      skipped: results.flatMap((r) => r.skipped),
+      errors: results.flatMap((r) => r.errors),
+      results,
     },
-    { status: outcome.status === "failure" ? 500 : 200 },
+    { status: status === "failure" ? 500 : 200 },
   );
-}
-
-function message(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
-}
-
-// A run that dies before any row lands (refresh failure, API outage) is a
-// whole-lane failure: one sync_runs failure row + one alert.
-async function syncFailed(startedAt: Date, reason: string): Promise<Response> {
-  try {
-    await recordSyncRun("whoop", startedAt, {
-      status: "failure",
-      rowsSynced: 0,
-      errorMessage: reason,
-    });
-  } catch (err) {
-    console.error("failed to record sync_runs row for whoop:", err);
-  }
-  await sendSyncFailureAlert(
-    "JerkAI sync failure: whoop",
-    `The Whoop sync run failed.\n\nReason: ${reason}\nTime: ${new Date().toISOString()}\n\nSee jerkai.app/status for last-successful-sync state.`,
-  );
-  return Response.json({ status: "failure", error: reason }, { status: 500 });
 }

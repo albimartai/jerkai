@@ -102,9 +102,15 @@ beforeAll(async () => {
   // user_id has no ON DELETE cascade (OQ-3) — every child table is cleared defensively before
   // users, since these tables are shared across the whole test run (fileParallelism: false)
   // and a stray row from another integration file would otherwise block this delete.
+  // whoop_tokens/whoop_workouts/sync_runs also reference users now (Whoop
+  // Multi-Tenancy) — cleared too, even though this file never writes to
+  // whoop_tokens/whoop_workouts itself.
   await sql`delete from biometric_readings`;
   await sql`delete from manual_macro_entries`;
   await sql`delete from daily_targets`;
+  await sql`delete from whoop_workouts`;
+  await sql`delete from sync_runs`;
+  await sql`delete from whoop_tokens`;
   await sql`delete from users`;
   await sql`insert into users (email) values (${PRIMARY_EMAIL})`;
 });
@@ -333,7 +339,10 @@ describe("POST /api/ingest/health — AC-MU10: attribution via PRIMARY_USER_EMAI
   afterEach(async () => {
     // The happy-path case below lands real rows via POST, tied to the user it creates —
     // user_id has no ON DELETE cascade (OQ-3), so biometric_readings must clear first.
+    // sync_runs also references users now (Whoop Multi-Tenancy) and this
+    // block's own POST calls write sync_runs rows tied to that same user.
     await sql`delete from biometric_readings`;
+    await sql`delete from sync_runs`;
     await sql`delete from users`;
   });
 

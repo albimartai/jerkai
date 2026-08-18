@@ -40,7 +40,17 @@ beforeAll(() => {
 });
 
 beforeEach(async () => {
+  // user_id has no ON DELETE cascade (OQ-3) — every child table across every
+  // integration file is cleared defensively before users, since these tables
+  // are shared across the whole test run (fileParallelism: false) and a
+  // stray row left by any other integration file would otherwise block this
+  // delete, even though this file only writes to sync_runs itself.
+  await sql`delete from biometric_readings`;
+  await sql`delete from manual_macro_entries`;
+  await sql`delete from daily_targets`;
+  await sql`delete from whoop_workouts`;
   await sql`delete from sync_runs`;
+  await sql`delete from whoop_tokens`;
   await sql`delete from users`;
 });
 

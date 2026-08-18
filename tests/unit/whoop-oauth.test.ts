@@ -1,22 +1,32 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// In-memory stand-in for the whoop_tokens row so token logic tests run
-// without Postgres: the module's SQL goes through getSql(), which we mock
-// with a tagged-template fake that routes on the statement's first keyword.
-const tokenRow: { current: Record<string, unknown> | null } = { current: null };
+// In-memory stand-in for whoop_tokens rows, keyed by user_id, so token logic
+// tests run without Postgres: the module's SQL goes through getSql(), which
+// we mock with a tagged-template fake that routes on the statement's first
+// keyword and, for whoop_tokens specifically, on the bound user_id value.
+const tokenRows = new Map<number, Record<string, unknown>>();
 
 const fakeSql = vi.fn(async (strings: TemplateStringsArray, ...values: unknown[]) => {
   const text = strings.join(" ");
   if (/^\s*select/i.test(text)) {
-    return tokenRow.current ? [tokenRow.current] : [];
+    const userId = values[0] as number;
+    const row = tokenRows.get(userId);
+    return row ? [row] : [];
   }
   if (/^\s*insert into whoop_tokens/i.test(text)) {
-    tokenRow.current = {
-      access_token_enc: values[0],
-      refresh_token_enc: values[1],
-      expires_at: values[2],
-      scope: values[3],
-    };
+    const [userId, accessTokenEnc, refreshTokenEnc, expiresAt, scope] = values as [
+      number,
+      unknown,
+      unknown,
+      unknown,
+      unknown,
+    ];
+    tokenRows.set(userId, {
+      access_token_enc: accessTokenEnc,
+      refresh_token_enc: refreshTokenEnc,
+      expires_at: expiresAt,
+      scope,
+    });
     return [];
   }
   throw new Error(`fake sql got an unexpected statement: ${text}`);
@@ -32,6 +42,8 @@ const {
   WHOOP_TOKEN_URL,
 } = await import("@/lib/whoop-oauth");
 const { decryptToken } = await import("@/lib/whoop-crypto");
+
+const TEST_USER_ID = 1;
 
 const fetchMock = vi.fn();
 
@@ -51,7 +63,7 @@ function tokenResponse(overrides: Record<string, unknown> = {}) {
 }
 
 beforeEach(() => {
-  tokenRow.current = null;
+  tokenRows.clear();
   vi.stubGlobal("fetch", fetchMock);
   vi.stubEnv("WHOOP_CLIENT_ID", "client-id-123");
   vi.stubEnv("WHOOP_CLIENT_SECRET", "client-secret-456");
@@ -129,53 +141,54 @@ describe("token requests (form-urlencoded per RFC 6749)", () => {
 
 describe("saveTokens + getFreshAccessToken (proactive refresh-on-use)", () => {
   it("stores tokens encrypted, never in the clear", async () => {
-    await saveTokens({
+    await saveTokens(TEST_USER_ID, {
       access_token: "access-plain",
       refresh_token: "refresh-plain",
       expires_in: 3600,
     });
-    const stored = tokenRow.current!;
+    const stored = tokenRows.get(TEST_USER_ID)!;
     expect(stored.access_token_enc).not.toContain("access-plain");
     expect(decryptToken(stored.access_token_enc as string)).toBe("access-plain");
     expect(decryptToken(stored.refresh_token_enc as string)).toBe("refresh-plain");
   });
 
   it("returns null when Whoop was never connected (no token row)", async () => {
-    expect(await getFreshAccessToken()).toBeNull();
+    expect(await getFreshAccessToken(TEST_USER_ID)).toBeNull();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("returns the stored token without refreshing while it is comfortably unexpired", async () => {
-    await saveTokens({ access_token: "a1", refresh_token: "r1", expires_in: 3600 });
-    expect(await getFreshAccessToken()).toBe("a1");
+    await saveTokens(TEST_USER_ID, { access_token: "a1", refresh_token: "r1", expires_in: 3600 });
+    expect(await getFreshAccessToken(TEST_USER_ID)).toBe("a1");
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("refreshes an expired token and persists the ROTATED pair (Whoop invalidates the old one)", async () => {
-    await saveTokens({ access_token: "a1", refresh_token: "r1", expires_in: -10 });
+    await saveTokens(TEST_USER_ID, { access_token: "a1", refresh_token: "r1", expires_in: -10 });
     fetchMock.mockResolvedValueOnce(
       tokenResponse({ access_token: "a2", refresh_token: "r2" }),
     );
 
-    expect(await getFreshAccessToken()).toBe("a2");
+    expect(await getFreshAccessToken(TEST_USER_ID)).toBe("a2");
     const body = new URLSearchParams(fetchMock.mock.calls[0][1].body);
     expect(body.get("refresh_token")).toBe("r1");
     // The rotated pair replaced the old row — losing it would strand the
     // integration until a manual re-connect.
-    expect(decryptToken(tokenRow.current!.access_token_enc as string)).toBe("a2");
-    expect(decryptToken(tokenRow.current!.refresh_token_enc as string)).toBe("r2");
+    const stored = tokenRows.get(TEST_USER_ID)!;
+    expect(decryptToken(stored.access_token_enc as string)).toBe("a2");
+    expect(decryptToken(stored.refresh_token_enc as string)).toBe("r2");
   });
 
   it("treats a token expiring within the 60s margin as expired", async () => {
-    await saveTokens({ access_token: "a1", refresh_token: "r1", expires_in: 30 });
+    await saveTokens(TEST_USER_ID, { access_token: "a1", refresh_token: "r1", expires_in: 30 });
     fetchMock.mockResolvedValueOnce(tokenResponse({ access_token: "a2" }));
-    expect(await getFreshAccessToken()).toBe("a2");
+    expect(await getFreshAccessToken(TEST_USER_ID)).toBe("a2");
   });
 
   it("supports forceRefresh for the sync route's reactive 401 retry", async () => {
-    await saveTokens({ access_token: "a1", refresh_token: "r1", expires_in: 3600 });
+    await saveTokens(TEST_USER_ID, { access_token: "a1", refresh_token: "r1", expires_in: 3600 });
     fetchMock.mockResolvedValueOnce(tokenResponse({ access_token: "a2" }));
-    expect(await getFreshAccessToken({ forceRefresh: true })).toBe("a2");
+    expect(await getFreshAccessToken(TEST_USER_ID, { forceRefresh: true })).toBe("a2");
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

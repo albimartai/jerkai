@@ -114,16 +114,17 @@ export async function refreshTokens(refreshToken: string): Promise<WhoopTokenRes
   });
 }
 
-// whoop_tokens holds exactly one row (id = 1, enforced by the schema) —
-// single-user app, one Whoop account.
-export async function saveTokens(tokens: WhoopTokenResponse): Promise<void> {
+// whoop_tokens is keyed by user_id (Whoop Multi-Tenancy, AC-WT2/AC-WT5) — a
+// Whoop connection is one-per-user, so user_id is the table's primary key
+// itself, not a surrogate id alongside it.
+export async function saveTokens(userId: number, tokens: WhoopTokenResponse): Promise<void> {
   const sql = getSql();
   const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
   await sql`
-    insert into whoop_tokens (id, access_token_enc, refresh_token_enc, expires_at, scope, updated_at)
-    values (1, ${encryptToken(tokens.access_token)}, ${encryptToken(tokens.refresh_token)},
+    insert into whoop_tokens (user_id, access_token_enc, refresh_token_enc, expires_at, scope, updated_at)
+    values (${userId}, ${encryptToken(tokens.access_token)}, ${encryptToken(tokens.refresh_token)},
             ${expiresAt}, ${tokens.scope ?? null}, now())
-    on conflict (id)
+    on conflict (user_id)
     do update set access_token_enc = excluded.access_token_enc,
                   refresh_token_enc = excluded.refresh_token_enc,
                   expires_at = excluded.expires_at,
@@ -134,10 +135,10 @@ export async function saveTokens(tokens: WhoopTokenResponse): Promise<void> {
 
 type StoredTokens = { accessToken: string; refreshToken: string; expiresAt: Date };
 
-async function loadTokens(): Promise<StoredTokens | null> {
+async function loadTokens(userId: number): Promise<StoredTokens | null> {
   const sql = getSql();
   const rows = await sql`
-    select access_token_enc, refresh_token_enc, expires_at from whoop_tokens where id = 1
+    select access_token_enc, refresh_token_enc, expires_at from whoop_tokens where user_id = ${userId}
   `;
   if (rows.length === 0) return null;
   return {
@@ -147,20 +148,35 @@ async function loadTokens(): Promise<StoredTokens | null> {
   };
 }
 
-// Returns a usable access token, refreshing (and persisting the rotated
-// pair) when the stored one is expired or within 60s of it. Returns null
-// when Whoop has never been connected — callers treat that as an expected
-// pre-connection state, not an error.
+// Returns a usable access token for the given user, refreshing (and
+// persisting the rotated pair) when the stored one is expired or within 60s
+// of it. Returns null when this user has never connected Whoop — callers
+// treat that as an expected pre-connection state, not an error.
 export async function getFreshAccessToken(
+  userId: number,
   options: { forceRefresh?: boolean } = {},
 ): Promise<string | null> {
-  const stored = await loadTokens();
+  const stored = await loadTokens(userId);
   if (!stored) return null;
   const expiryMarginMs = 60_000;
   if (!options.forceRefresh && stored.expiresAt.getTime() - Date.now() > expiryMarginMs) {
     return stored.accessToken;
   }
   const refreshed = await refreshTokens(stored.refreshToken);
-  await saveTokens(refreshed);
+  await saveTokens(userId, refreshed);
   return refreshed.access_token;
+}
+
+// The cron loop's iteration source (app/api/whoop/sync/route.ts, §0/NFR-77) —
+// every row in whoop_tokens already carries the user_id to attribute pulls
+// to; this joins to users for the email AC-WT9's failure alert names.
+export async function listConnectedUsers(): Promise<{ userId: number; email: string }[]> {
+  const sql = getSql();
+  const rows = await sql`
+    select whoop_tokens.user_id as user_id, users.email as email
+    from whoop_tokens
+    join users on users.id = whoop_tokens.user_id
+    order by whoop_tokens.user_id
+  `;
+  return rows.map((row) => ({ userId: row.user_id as number, email: row.email as string }));
 }
