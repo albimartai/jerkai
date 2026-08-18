@@ -417,3 +417,35 @@ describe("POST /api/ingest/health — AC-PUE2/AC-PUE3: resolvePrimaryUserId fail
     expect(sendSyncFailureAlert).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * AUTO-GENERATED TEST STUB — JerkAI Contract
+ * PRD Target: JerkAI — Build PRD: Whoop Multi-Tenancy
+ *
+ * DO NOT EDIT test names, AC IDs, or stub assertions during implementation.
+ * Implementation code must be written to satisfy these stubs.
+ * Editing stubs to fit implementation triggers a blocking finding in jerkai-falsify-diff.
+ */
+describe("POST /api/ingest/health — AC-WT12: rejected-request sync_runs rows stay attributed", () => {
+  it("AC-WT12: an unauthorized request's sync_runs row is attributed to PRIMARY_USER_EMAIL's resolved user_id, never null", async () => {
+    const [user] = await sql`select id from users where email = ${PRIMARY_EMAIL}`;
+
+    const res = await POST(ingestRequest(JSON.stringify(fullPayload), "wrong-key"));
+    expect(res.status).toBe(401);
+
+    const rows = await sql`select user_id from sync_runs where source = 'fitdays'`;
+    expect(rows).toHaveLength(1);
+    expect(rows[0].user_id).toBe(user.id);
+  });
+
+  it("AC-WT12: a malformed-body request's sync_runs row is attributed to PRIMARY_USER_EMAIL's resolved user_id, never null", async () => {
+    const [user] = await sql`select id from users where email = ${PRIMARY_EMAIL}`;
+
+    const res = await POST(ingestRequest("{definitely not json", SECRET));
+    expect(res.status).toBe(400);
+
+    const rows = await sql`select user_id from sync_runs where source = 'fitdays'`;
+    expect(rows).toHaveLength(1);
+    expect(rows[0].user_id).toBe(user.id);
+  });
+});

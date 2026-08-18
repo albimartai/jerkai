@@ -179,3 +179,46 @@ describe("saveTokens + getFreshAccessToken (proactive refresh-on-use)", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
+
+/**
+ * AUTO-GENERATED TEST STUB — JerkAI Contract
+ * PRD Target: JerkAI — Build PRD: Whoop Multi-Tenancy
+ *
+ * DO NOT EDIT test names, AC IDs, or stub assertions during implementation.
+ * Implementation code must be written to satisfy these stubs.
+ * Editing stubs to fit implementation triggers a blocking finding in jerkai-falsify-diff.
+ */
+describe("saveTokens + getFreshAccessToken — per-user (AC-WT5, AC-WT6)", () => {
+  // §1: saveTokens/loadTokens/getFreshAccessToken all gain a userId parameter
+  // once whoop_tokens is keyed by user_id instead of the singleton id = 1.
+  // These stubs call the prospective per-user signatures directly.
+
+  it("AC-WT5: reconnecting an already-connected user updates their stored token in place rather than leaving the old one live", async () => {
+    const userId = 501;
+    await saveTokens(userId, {
+      access_token: "first-connect-access",
+      refresh_token: "first-connect-refresh",
+      expires_in: 3600,
+    });
+    await saveTokens(userId, {
+      access_token: "reconnect-access",
+      refresh_token: "reconnect-refresh",
+      expires_in: 3600,
+    });
+
+    expect(await getFreshAccessToken(userId)).toBe("reconnect-access");
+  });
+
+  it("AC-WT6: getFreshAccessToken(userId) returns null for a signed-in user with no whoop_tokens row of their own, even when a different user is connected", async () => {
+    const connectedUserId = 601;
+    const unconnectedUserId = 602;
+    await saveTokens(connectedUserId, {
+      access_token: "connected-access",
+      refresh_token: "connected-refresh",
+      expires_in: 3600,
+    });
+
+    expect(await getFreshAccessToken(unconnectedUserId)).toBeNull();
+    expect(await getFreshAccessToken(connectedUserId)).toBe("connected-access");
+  });
+});
