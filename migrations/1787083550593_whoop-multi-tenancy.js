@@ -140,6 +140,15 @@ export const up = (pgm) => {
 };
 
 /**
+ * down is safe only while whoop_tokens holds at most one connected user —
+ * collapsing more than one user_id row onto the restored surrogate id = 1
+ * would either violate the restored primary key or silently merge multiple
+ * users' tokens onto a single row, depending on execution order. Guarded
+ * explicitly rather than left as an implicit precondition (jerkai-falsify-diff,
+ * 2026-08-19) since no AC/NFR in the PRD covers rollback correctness and this
+ * migration is not expected to run down in production after a second user
+ * has connected.
+ *
  * @param pgm {import('node-pg-migrate').MigrationBuilder}
  * @returns {Promise<void> | void}
  */
@@ -150,6 +159,16 @@ export const down = (pgm) => {
 
     drop index whoop_workouts_user_id_idx;
     alter table whoop_workouts drop column user_id;
+
+    do $$
+    declare
+      connected_count integer;
+    begin
+      select count(*) into connected_count from whoop_tokens;
+      if connected_count > 1 then
+        raise exception 'whoop_tokens migration rollback: % rows present; this down migration only supports rolling back to a single-row/single-user whoop_tokens table (collapsing multiple user_id rows onto id = 1 would corrupt data)', connected_count;
+      end if;
+    end $$;
 
     alter table whoop_tokens drop constraint whoop_tokens_pkey;
     alter table whoop_tokens add column id smallint;

@@ -219,4 +219,56 @@ describe("whoop_tokens/sync_runs migration — AC-WT10/AC-WT11 (isolated whoop_t
     expect(columns).not.toContain("user_id");
     expect(await rowCount("sync_runs")).toBe(1);
   });
+
+  it("AC-WT13: whoop_workouts migration is a clean no-op (schema change lands, no PRIMARY_USER_EMAIL resolution required) when whoop_workouts holds zero rows", async () => {
+    await buildPreMigrationSchema();
+
+    await runThisMigration();
+
+    const columns = await tableColumnNames("whoop_workouts");
+    expect(columns).toContain("user_id");
+    expect(await rowCount("whoop_workouts")).toBe(0);
+  });
+
+  it("AC-WT13: backfills every pre-existing whoop_workouts row to PRIMARY_USER_EMAIL's resolved user_id, not to 'the sole row in users'", async () => {
+    await buildPreMigrationSchema();
+    const primaryEmail = "wt13-primary@example.com";
+    await sql.query(`insert into ${SCHEMA}.users (email) values ($1)`, [primaryEmail]);
+    // A second, non-primary user already exists — proves the backfill target
+    // is PRIMARY_USER_EMAIL's resolved row, not merely "whichever row exists
+    // in users", the same property AC-WT10's own backfill test proves.
+    await sql.query(`insert into ${SCHEMA}.users (email) values ($1)`, [
+      "wt13-someone-else@example.com",
+    ]);
+    await sql.query(
+      `insert into ${SCHEMA}.whoop_workouts (id, reading_date, start_time, score_state, raw_payload)
+       values ('wt13-workout-1', current_date, now(), 'SCORED', '{}'::jsonb)`,
+    );
+    vi.stubEnv("PRIMARY_USER_EMAIL", primaryEmail);
+
+    await runThisMigration();
+
+    const primaryUser = (await sql.query(`select id from ${SCHEMA}.users where email = $1`, [
+      primaryEmail,
+    ])) as { id: number }[];
+    const rows = (await sql.query(`select user_id from ${SCHEMA}.whoop_workouts`)) as {
+      user_id: number;
+    }[];
+    expect(rows).toEqual([{ user_id: primaryUser[0].id }]);
+  });
+
+  it("AC-WT13: aborts without modifying whoop_workouts when a pre-existing row exists but PRIMARY_USER_EMAIL is unset", async () => {
+    await buildPreMigrationSchema();
+    await sql.query(
+      `insert into ${SCHEMA}.whoop_workouts (id, reading_date, start_time, score_state, raw_payload)
+       values ('wt13-workout-1', current_date, now(), 'SCORED', '{}'::jsonb)`,
+    );
+    vi.stubEnv("PRIMARY_USER_EMAIL", "");
+
+    await expect(runThisMigration()).rejects.toThrow();
+
+    const columns = await tableColumnNames("whoop_workouts");
+    expect(columns).not.toContain("user_id");
+    expect(await rowCount("whoop_workouts")).toBe(1);
+  });
 });
