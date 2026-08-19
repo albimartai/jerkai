@@ -436,6 +436,14 @@ describe("POST /api/ingest/health — AC-PUE2/AC-PUE3: resolvePrimaryUserId fail
  * Editing stubs to fit implementation triggers a blocking finding in jerkai-falsify-diff.
  */
 describe("POST /api/ingest/health — AC-WT12: rejected-request sync_runs rows stay attributed", () => {
+  // Don't rely on the AC-PUE2/AC-PUE3 block above leaving the fixture user behind —
+  // that block's own beforeEach deletes/reinserts it, but this block must not depend
+  // on sibling ordering or survival (FM-19).
+  beforeEach(async () => {
+    await sql`delete from users`;
+    await sql`insert into users (email) values (${PRIMARY_EMAIL})`;
+  });
+
   it("AC-WT12: an unauthorized request's sync_runs row is attributed to PRIMARY_USER_EMAIL's resolved user_id, never null", async () => {
     const [user] = await sql`select id from users where email = ${PRIMARY_EMAIL}`;
 
