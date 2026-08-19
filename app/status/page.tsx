@@ -24,6 +24,7 @@ export default async function Status() {
   }
 
   const sql = getSql();
+  const userId = Number(session.user.id);
   const rows = (await sql`
     select source,
            to_char(max(coalesce(finished_at, started_at)) filter (where status = 'success')
@@ -32,6 +33,7 @@ export default async function Status() {
                    at time zone 'utc', 'YYYY-MM-DD HH24:MI "UTC"') as last_run_at,
            (array_agg(status order by started_at desc))[1] as last_run_status
     from sync_runs
+    where user_id = ${userId}
     group by source
   `) as SyncSummaryRow[];
 

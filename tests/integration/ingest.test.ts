@@ -102,9 +102,15 @@ beforeAll(async () => {
   // user_id has no ON DELETE cascade (OQ-3) — every child table is cleared defensively before
   // users, since these tables are shared across the whole test run (fileParallelism: false)
   // and a stray row from another integration file would otherwise block this delete.
+  // whoop_tokens/whoop_workouts/sync_runs also reference users now (Whoop
+  // Multi-Tenancy) — cleared too, even though this file never writes to
+  // whoop_tokens/whoop_workouts itself.
   await sql`delete from biometric_readings`;
   await sql`delete from manual_macro_entries`;
   await sql`delete from daily_targets`;
+  await sql`delete from whoop_workouts`;
+  await sql`delete from sync_runs`;
+  await sql`delete from whoop_tokens`;
   await sql`delete from users`;
   await sql`insert into users (email) values (${PRIMARY_EMAIL})`;
 });
@@ -333,7 +339,10 @@ describe("POST /api/ingest/health — AC-MU10: attribution via PRIMARY_USER_EMAI
   afterEach(async () => {
     // The happy-path case below lands real rows via POST, tied to the user it creates —
     // user_id has no ON DELETE cascade (OQ-3), so biometric_readings must clear first.
+    // sync_runs also references users now (Whoop Multi-Tenancy) and this
+    // block's own POST calls write sync_runs rows tied to that same user.
     await sql`delete from biometric_readings`;
+    await sql`delete from sync_runs`;
     await sql`delete from users`;
   });
 
@@ -415,5 +424,45 @@ describe("POST /api/ingest/health — AC-PUE2/AC-PUE3: resolvePrimaryUserId fail
     });
     expect(body.ignoredMetrics).toEqual([]);
     expect(sendSyncFailureAlert).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * AUTO-GENERATED TEST STUB — JerkAI Contract
+ * PRD Target: JerkAI — Build PRD: Whoop Multi-Tenancy
+ *
+ * DO NOT EDIT test names, AC IDs, or stub assertions during implementation.
+ * Implementation code must be written to satisfy these stubs.
+ * Editing stubs to fit implementation triggers a blocking finding in jerkai-falsify-diff.
+ */
+describe("POST /api/ingest/health — AC-WT12: rejected-request sync_runs rows stay attributed", () => {
+  // Don't rely on the AC-PUE2/AC-PUE3 block above leaving the fixture user behind —
+  // that block's own beforeEach deletes/reinserts it, but this block must not depend
+  // on sibling ordering or survival (FM-19).
+  beforeEach(async () => {
+    await sql`delete from users`;
+    await sql`insert into users (email) values (${PRIMARY_EMAIL})`;
+  });
+
+  it("AC-WT12: an unauthorized request's sync_runs row is attributed to PRIMARY_USER_EMAIL's resolved user_id, never null", async () => {
+    const [user] = await sql`select id from users where email = ${PRIMARY_EMAIL}`;
+
+    const res = await POST(ingestRequest(JSON.stringify(fullPayload), "wrong-key"));
+    expect(res.status).toBe(401);
+
+    const rows = await sql`select user_id from sync_runs where source = 'fitdays'`;
+    expect(rows).toHaveLength(1);
+    expect(rows[0].user_id).toBe(user.id);
+  });
+
+  it("AC-WT12: a malformed-body request's sync_runs row is attributed to PRIMARY_USER_EMAIL's resolved user_id, never null", async () => {
+    const [user] = await sql`select id from users where email = ${PRIMARY_EMAIL}`;
+
+    const res = await POST(ingestRequest("{definitely not json", SECRET));
+    expect(res.status).toBe(400);
+
+    const rows = await sql`select user_id from sync_runs where source = 'fitdays'`;
+    expect(rows).toHaveLength(1);
+    expect(rows[0].user_id).toBe(user.id);
   });
 });

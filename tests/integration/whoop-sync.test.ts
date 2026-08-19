@@ -7,6 +7,7 @@ const sendSyncFailureAlert = vi.hoisted(() => vi.fn(async () => {}));
 vi.mock("@/lib/alerts", () => ({ sendSyncFailureAlert }));
 
 import { GET } from "@/app/api/whoop/sync/route";
+import { encryptToken } from "@/lib/whoop-crypto";
 import { saveTokens } from "@/lib/whoop-oauth";
 
 // End-to-end over a real, disposable Neon branch: the route handler is
@@ -134,11 +135,11 @@ function stubWhoopApi(
   });
 }
 
-// This pipe has no session (machine-to-machine), so it attributes every row via
-// PRIMARY_USER_EMAIL resolution (NFR-71) — one fixed test user backs every pre-existing
-// test in this file that isn't itself exercising attribution (that's the AC-MU11 block below,
-// which stubs its own PRIMARY_USER_EMAIL value and manages its own users rows).
-const PRIMARY_EMAIL = "whoop-sync-test-primary@example.com";
+// Whoop Multi-Tenancy (NFR-80): PRIMARY_USER_EMAIL/resolvePrimaryUserId() is
+// retired from this route entirely — the shared fixture user below is
+// connected via its own whoop_tokens row (saveTokens(testUserId, ...)) and
+// attributed via listConnectedUsers(), not via any env-var resolution.
+const FIXTURE_USER_EMAIL = "whoop-sync-test-primary@example.com";
 
 // user_id has no ON DELETE cascade (OQ-3) — a stray biometric_readings/manual_macro_entries/
 // daily_targets row from any other integration file blocks `delete from users` with a foreign
@@ -164,12 +165,18 @@ beforeAll(async () => {
   vi.stubEnv("WHOOP_CLIENT_ID", "test-client");
   vi.stubEnv("WHOOP_CLIENT_SECRET", "test-secret");
   vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://jerkai.app");
-  vi.stubEnv("PRIMARY_USER_EMAIL", PRIMARY_EMAIL);
   await sql`delete from biometric_readings`;
   await sql`delete from manual_macro_entries`;
   await sql`delete from daily_targets`;
+  // whoop_tokens/whoop_workouts/sync_runs also reference users (no ON DELETE
+  // cascade, same OQ-3 reasoning) — cleared here too, since a leftover row
+  // from another integration file would otherwise block this delete. This
+  // file's own beforeEach re-manages whoop_tokens for each of its own tests.
+  await sql`delete from whoop_workouts`;
+  await sql`delete from sync_runs`;
+  await sql`delete from whoop_tokens`;
   await sql`delete from users`;
-  const [user] = await sql`insert into users (email) values (${PRIMARY_EMAIL}) returning id`;
+  const [user] = await sql`insert into users (email) values (${FIXTURE_USER_EMAIL}) returning id`;
   testUserId = user.id;
 });
 
@@ -178,7 +185,11 @@ beforeEach(async () => {
   await sql`delete from whoop_workouts`;
   await sql`delete from sync_runs`;
   await sql`delete from whoop_tokens`;
-  await saveTokens({ access_token: "test-access", refresh_token: "test-refresh", expires_in: 3600 });
+  await saveTokens(testUserId, {
+    access_token: "test-access",
+    refresh_token: "test-refresh",
+    expires_in: 3600,
+  });
   // Default: any Whoop call is unexpected until a test stubs it explicitly.
   stubWhoopHost((url) => {
     throw new Error(`unexpected Whoop API call: ${url.pathname}`);
@@ -201,6 +212,21 @@ async function readingRows() {
     from biometric_readings
     order by metric
   `;
+}
+
+// AC-WT2/AC-WT3/AC-WT7/AC-WT9 need a second connected user distinct from the
+// shared beforeEach fixture's single account — seeds a users row plus its own
+// whoop_tokens row directly (real AES-256-GCM ciphertext via encryptToken, so
+// getFreshAccessToken's decrypt succeeds), rather than saveTokens(), which is
+// still single-argument/id=1-only until this slice's own implementation lands.
+async function seedConnectedUser(email: string, accessToken: string): Promise<number> {
+  const [user] = await sql`insert into users (email) values (${email}) returning id`;
+  await sql`
+    insert into whoop_tokens (user_id, access_token_enc, refresh_token_enc, expires_at, scope, updated_at)
+    values (${user.id}, ${encryptToken(accessToken)}, ${encryptToken(`${accessToken}-refresh`)},
+            ${new Date(Date.now() + 3_600_000).toISOString()}, null, now())
+  `;
+  return user.id as number;
 }
 
 describe("GET /api/whoop/sync — auth", () => {
@@ -302,14 +328,6 @@ describe("GET /api/whoop/sync — happy path", () => {
     expect(rows[0].value).toBe("7");
     expect(rows[0].score_state).toBe("SCORED"); // raw_payload is now the Whoop record
   });
-
-  it("reports not_connected (no failure run, no alert) when no token row exists", async () => {
-    await sql`delete from whoop_tokens`;
-    const res = await GET(syncRequest(AUTH));
-    expect((await res.json()).status).toBe("not_connected");
-    expect(await sql`select count(*)::int as n from sync_runs`).toEqual([{ n: 0 }]);
-    expect(sendSyncFailureAlert).not.toHaveBeenCalled();
-  });
 });
 
 describe("GET /api/whoop/sync — failure paths", () => {
@@ -356,81 +374,169 @@ describe("GET /api/whoop/sync — failure paths", () => {
   });
 });
 
+// AC-MU11 ("attribution via PRIMARY_USER_EMAIL") and AC-PUE1/AC-PUE3
+// ("resolvePrimaryUserId failure alerting") test blocks were removed here as
+// PRD-authorized exceptions to their own DO-NOT-EDIT headers (Whoop
+// Multi-Tenancy PRD §1/§7): NFR-80 retires resolvePrimaryUserId() from this
+// route entirely, and both blocks asserted exactly the resolvePrimaryUserId
+// -in-sync-route behavior that retirement removes. The pre-existing,
+// non-stub-headered "reports not_connected..." test was also removed —
+// AC-WT1 below retires the exact single-global "not_connected" shortcut
+// response it asserted, and AC-WT1's own block covers the equivalent
+// zero-token scenario with the correct, updated semantics.
+
 /**
  * AUTO-GENERATED TEST STUB — JerkAI Contract
- * PRD Target: JerkAI — Build PRD: Multi-User Data Model Retrofit
+ * PRD Target: JerkAI — Build PRD: Whoop Multi-Tenancy
  *
  * DO NOT EDIT test names, AC IDs, or stub assertions during implementation.
  * Implementation code must be written to satisfy these stubs.
  * Editing stubs to fit implementation triggers a blocking finding in jerkai-falsify-diff.
  */
-describe("GET /api/whoop/sync — AC-MU11: attribution via PRIMARY_USER_EMAIL", () => {
-  const PRIMARY_EMAIL = "primary-mu11@example.com";
-
-  afterEach(async () => {
-    await sql`delete from biometric_readings`;
-    await sql`delete from users`;
-  });
-
-  it("AC-MU11: readings upserted via upsertReading are attributed to the user resolved by looking up PRIMARY_USER_EMAIL in users", async () => {
-    await sql`delete from biometric_readings`;
-    await sql`delete from users`;
-    const [user] = await sql`insert into users (email) values (${PRIMARY_EMAIL}) returning id`;
-    vi.stubEnv("PRIMARY_USER_EMAIL", PRIMARY_EMAIL);
-
-    stubWhoopApi({ recovery: [RECOVERY], sleep: [SLEEP], cycle: [CYCLE], workout: [] });
+describe("GET /api/whoop/sync — AC-WT1: zero connections is a legitimate empty run", () => {
+  it("AC-WT1: completes successfully having processed zero users when whoop_tokens holds zero rows, with no misleading failure and no alert", async () => {
+    await sql`delete from whoop_tokens`;
     const res = await GET(syncRequest(AUTH));
-    expect(res.status).toBe(200);
+    const body = await res.json();
 
-    const rows = await sql`select distinct user_id from biometric_readings`;
-    expect(rows).toEqual([{ user_id: user.id }]);
+    // The app-wide "not_connected" shortcut is retired (§0) — an empty
+    // whoop_tokens table is now a legitimate zero-user cron run, not a
+    // pre-connection special case.
+    expect(res.status).toBe(200);
+    expect(body.status).toBe("success");
+    expect(await sql`select count(*)::int as n from biometric_readings`).toEqual([{ n: 0 }]);
+    expect(await sql`select count(*)::int as n from whoop_workouts`).toEqual([{ n: 0 }]);
+    expect(await sql`select count(*)::int as n from sync_runs`).toEqual([{ n: 0 }]);
+    expect(sendSyncFailureAlert).not.toHaveBeenCalled();
+    expect(whoopCalls).toEqual([]);
   });
 });
 
 /**
  * AUTO-GENERATED TEST STUB — JerkAI Contract
- * PRD Target: JerkAI — Build PRD: Restore PRIMARY_USER_EMAIL + Close the Alert-on-Config-Failure Gap
+ * PRD Target: JerkAI — Build PRD: Whoop Multi-Tenancy
  *
  * DO NOT EDIT test names, AC IDs, or stub assertions during implementation.
  * Implementation code must be written to satisfy these stubs.
  * Editing stubs to fit implementation triggers a blocking finding in jerkai-falsify-diff.
  */
-describe("GET /api/whoop/sync — AC-PUE1/AC-PUE3: resolvePrimaryUserId failure alerting", () => {
-  // The AC-MU11 block above deletes every `users` row in its own afterEach and never
-  // restores the fixture user beforeAll inserted — reinsert it here so this block's own
-  // preconditions don't depend on what a sibling block leaves behind.
-  beforeEach(async () => {
-    await sql`delete from users`;
-    await sql`insert into users (email) values (${PRIMARY_EMAIL})`;
-  });
+describe("GET /api/whoop/sync — AC-WT2: two connected users, correctly attributed", () => {
+  it("AC-WT2: each user's pulled readings are attributed to their own user_id, never crossed, even for the identical metric and date", async () => {
+    const userA = testUserId; // seeded by the shared beforeAll fixture
+    const userB = await seedConnectedUser("whoop-sync-test-userb@example.com", "userb-access");
 
-  it("AC-PUE1: records a whoop sync_runs failure row and alerts once when PRIMARY_USER_EMAIL is unset", async () => {
-    vi.stubEnv("PRIMARY_USER_EMAIL", "");
+    // Both users pull the same stubbed Whoop day, so any cross-attribution
+    // bug would collapse them into a single (source, metric, day) row rather
+    // than one row per user.
+    stubWhoopApi({ recovery: [], sleep: [], cycle: [CYCLE], workout: [] });
     const res = await GET(syncRequest(AUTH));
-    expect(res.status).toBe(500);
-
-    const runs = await sql`select source, status, error_message from sync_runs`;
-    expect(runs).toHaveLength(1);
-    expect(runs[0].source).toBe("whoop");
-    expect(runs[0].status).toBe("failure");
-    expect(runs[0].error_message).toContain("PRIMARY_USER_EMAIL");
-    expect(sendSyncFailureAlert).toHaveBeenCalledTimes(1);
-
-    vi.stubEnv("PRIMARY_USER_EMAIL", PRIMARY_EMAIL);
-  });
-
-  it("AC-PUE3: happy-path response status/shape is unchanged when PRIMARY_USER_EMAIL resolves correctly", async () => {
-    stubWhoopApi({ recovery: [RECOVERY], sleep: [SLEEP], cycle: [CYCLE], workout: [WORKOUT] });
-    const res = await GET(syncRequest(AUTH));
-    const body = await res.json();
-
     expect(res.status).toBe(200);
-    expect(body.status).toBe("success");
-    expect(body).toHaveProperty("window");
-    expect(body).toHaveProperty("rowsSynced");
-    expect(body).toHaveProperty("counts");
-    expect(body).toHaveProperty("skipped");
-    expect(body).toHaveProperty("errors");
-    expect(sendSyncFailureAlert).not.toHaveBeenCalled();
+
+    const rows = await sql`
+      select user_id from biometric_readings where metric = 'day_strain' order by user_id
+    `;
+    expect(rows.map((r) => r.user_id).sort((a, b) => a - b)).toEqual(
+      [userA, userB].sort((a, b) => a - b),
+    );
+  });
+});
+
+/**
+ * AUTO-GENERATED TEST STUB — JerkAI Contract
+ * PRD Target: JerkAI — Build PRD: Whoop Multi-Tenancy
+ *
+ * DO NOT EDIT test names, AC IDs, or stub assertions during implementation.
+ * Implementation code must be written to satisfy these stubs.
+ * Editing stubs to fit implementation triggers a blocking finding in jerkai-falsify-diff.
+ */
+describe("GET /api/whoop/sync — AC-WT3: per-user failure isolation", () => {
+  it("AC-WT3: one connected user's Whoop API failure does not block, skip, or mark failed the other connected user's sync in the same run", async () => {
+    const userA = testUserId;
+    const userB = await seedConnectedUser("whoop-sync-test-userb-fail@example.com", "userb-fail-access");
+
+    // Route the stub by which user's access token is on the request: user B's
+    // pull always 500s, user A's always succeeds — same run, independent outcomes.
+    fetchMock.mockImplementation(async (input: URL | RequestInfo, init?: RequestInit) => {
+      const url = urlOf(input);
+      if (url.hostname !== WHOOP_HOST) return realFetch(input as RequestInfo, init);
+      whoopCalls.push(url.pathname);
+      const auth = (init?.headers as Record<string, string> | undefined)?.Authorization ?? "";
+      if (auth.includes("userb-fail-access")) {
+        return new Response("upstream exploded for user B", { status: 500 });
+      }
+      const records = url.pathname.endsWith("/cycle") ? [CYCLE] : [];
+      return new Response(JSON.stringify({ records, next_token: null }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+
+    const res = await GET(syncRequest(AUTH));
+    expect(res.status).toBe(200);
+
+    const runs = await sql`select user_id, status from sync_runs order by user_id`;
+    const runA = runs.find((r) => r.user_id === userA);
+    const runB = runs.find((r) => r.user_id === userB);
+    expect(runA?.status).toBe("success");
+    expect(runB?.status).toBe("failure");
+  });
+});
+
+/**
+ * AUTO-GENERATED TEST STUB — JerkAI Contract
+ * PRD Target: JerkAI — Build PRD: Whoop Multi-Tenancy
+ *
+ * DO NOT EDIT test names, AC IDs, or stub assertions during implementation.
+ * Implementation code must be written to satisfy these stubs.
+ * Editing stubs to fit implementation triggers a blocking finding in jerkai-falsify-diff.
+ */
+describe("GET /api/whoop/sync — AC-WT7: one sync_runs row per connected user per run", () => {
+  it("AC-WT7: a cron run covering two connected users writes one sync_runs row per user, never a single row conflating both outcomes", async () => {
+    const userA = testUserId;
+    const userB = await seedConnectedUser("whoop-sync-test-userb-runs@example.com", "userb-runs-access");
+
+    stubWhoopApi({ recovery: [], sleep: [], cycle: [CYCLE], workout: [] });
+    await GET(syncRequest(AUTH));
+
+    const runs = await sql`select user_id from sync_runs where source = 'whoop' order by user_id`;
+    expect(runs.map((r) => r.user_id).sort((a, b) => a - b)).toEqual(
+      [userA, userB].sort((a, b) => a - b),
+    );
+  });
+});
+
+/**
+ * AUTO-GENERATED TEST STUB — JerkAI Contract
+ * PRD Target: JerkAI — Build PRD: Whoop Multi-Tenancy
+ *
+ * DO NOT EDIT test names, AC IDs, or stub assertions during implementation.
+ * Implementation code must be written to satisfy these stubs.
+ * Editing stubs to fit implementation triggers a blocking finding in jerkai-falsify-diff.
+ */
+describe("GET /api/whoop/sync — AC-WT9: failure alert names the affected user", () => {
+  it("AC-WT9: the sync-failure alert body names the failed user by email, so more than one connected user's failures can be distinguished", async () => {
+    const failEmail = "whoop-sync-test-userc-fail@example.com";
+    await seedConnectedUser(failEmail, "userc-fail-access");
+
+    fetchMock.mockImplementation(async (input: URL | RequestInfo, init?: RequestInit) => {
+      const url = urlOf(input);
+      if (url.hostname !== WHOOP_HOST) return realFetch(input as RequestInfo, init);
+      whoopCalls.push(url.pathname);
+      const auth = (init?.headers as Record<string, string> | undefined)?.Authorization ?? "";
+      if (auth.includes("userc-fail-access")) {
+        return new Response("upstream exploded", { status: 500 });
+      }
+      return new Response(JSON.stringify({ records: [], next_token: null }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+
+    await GET(syncRequest(AUTH));
+
+    expect(sendSyncFailureAlert).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.stringContaining(failEmail),
+    );
   });
 });

@@ -20,12 +20,19 @@ export async function GET(): Promise<Response> {
 
   const state = randomBytes(16).toString("hex");
   const cookieStore = await cookies();
-  cookieStore.set("whoop_oauth_state", state, {
+  const cookieOptions = {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
-    sameSite: "lax", // sent on Whoop's top-level redirect back to the callback
+    sameSite: "lax" as const, // sent on Whoop's top-level redirect back to the callback
     path: "/api/whoop",
     maxAge: 600,
-  });
+  };
+  cookieStore.set("whoop_oauth_state", state, cookieOptions);
+  // Binds the roundtrip to the initiating user (AC-WT4, NFR-78, §0): the
+  // callback compares this against its own fresh session.user.id, so a
+  // session change mid-flight (log out, a different user signs in) is
+  // refused rather than silently attributing the resulting tokens to
+  // whoever is signed in when Whoop's redirect completes.
+  cookieStore.set("whoop_oauth_user", session.user.id, cookieOptions);
   return Response.redirect(buildAuthorizeUrl(state), 302);
 }

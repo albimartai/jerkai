@@ -101,3 +101,9 @@ jobs:
         run: npm run migrate:prod
         env:
           DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+          # Whoop Multi-Tenancy: the first migration in this repo to read
+          # PRIMARY_USER_EMAIL from inside up(pgm) itself (see the migration
+          # file's own docblock) — must be set as a repo secret before this
+          # PR merges, or the migration aborts (safely, since production
+          # already holds a pre-existing whoop_tokens row).
+          PRIMARY_USER_EMAIL: ${{ secrets.PRIMARY_USER_EMAIL }}

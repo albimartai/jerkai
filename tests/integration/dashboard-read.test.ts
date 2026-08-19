@@ -43,6 +43,12 @@ beforeEach(async () => {
   await sql`delete from biometric_readings`;
   await sql`delete from manual_macro_entries`;
   await sql`delete from daily_targets`;
+  // Whoop Multi-Tenancy: whoop_tokens/whoop_workouts/sync_runs also reference
+  // users now (no ON DELETE cascade, same OQ-3 reasoning) — cleared
+  // defensively too, even though this file never writes to them itself.
+  await sql`delete from whoop_workouts`;
+  await sql`delete from sync_runs`;
+  await sql`delete from whoop_tokens`;
   await sql`delete from users`;
   const [user] = await sql`insert into users (email) values ('dashboard-read-test@example.com') returning id`;
   testUserId = user.id;

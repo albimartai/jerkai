@@ -27,12 +27,18 @@ function isAuthorized(request: Request, secret: string): boolean {
 // can't be attributed to one source, and no pipe landed — log a failure
 // run for every lane this route owns so /status and alerting see it either
 // way. (Only this route's lanes: a broken phone export must not poison the
-// whoop lane, which belongs to /api/whoop/sync.)
-async function recordRejectedRequest(startedAt: Date, reason: string): Promise<void> {
+// whoop lane, which belongs to /api/whoop/sync.) userId is nullable: every
+// caller below passes a resolved number except the resolvePrimaryUserId()
+// failure branch itself, which has none to pass (Whoop Multi-Tenancy §0).
+async function recordRejectedRequest(
+  userId: number | null,
+  startedAt: Date,
+  reason: string,
+): Promise<void> {
   try {
     await Promise.all(
       HEALTH_EXPORT_SOURCES.map((source) =>
-        recordSyncRun(source, startedAt, {
+        recordSyncRun(source, userId, startedAt, {
           status: "failure",
           rowsSynced: 0,
           errorMessage: reason,
@@ -51,6 +57,28 @@ async function recordRejectedRequest(startedAt: Date, reason: string): Promise<v
 export async function POST(request: Request): Promise<Response> {
   const startedAt = new Date();
 
+  // Resolved once, at the top of the route, before the x-api-key check
+  // (Whoop Multi-Tenancy §0/§1/AC-WT12) — the extra DB lookup on every
+  // unauthorized/malformed request is accepted so recordRejectedRequest's
+  // sync_runs rows are attributed for both the pre-auth-rejection and
+  // post-mapping-success paths. Consequence, accepted as intended fail-closed
+  // behavior: a request that is simultaneously unauthorized and hits an
+  // unresolvable PRIMARY_USER_EMAIL now returns 500 rather than the 401 it
+  // returned before this slice — the misconfiguration short-circuits ahead
+  // of the auth check. The resolvePrimaryUserId()-failure catch block below
+  // is the one case with no userId to pass and keeps calling
+  // recordRejectedRequest with null (§0, backs the pre-existing, DO-NOT-EDIT
+  // -headered AC-PUE2 lane in tests/integration/ingest.test.ts).
+  let primaryUserId: number;
+  try {
+    primaryUserId = await resolvePrimaryUserId();
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("ingest rejected:", message);
+    await recordRejectedRequest(null, startedAt, `primary user resolution failed: ${message}`);
+    return Response.json({ error: "server is not configured for ingest" }, { status: 500 });
+  }
+
   const secret = process.env.HEALTH_EXPORT_SHARED_SECRET;
   if (!secret) {
     console.error("ingest rejected: HEALTH_EXPORT_SHARED_SECRET is not set");
@@ -58,32 +86,26 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   if (!isAuthorized(request, secret)) {
-    await recordRejectedRequest(startedAt, "unauthorized: missing or invalid x-api-key header");
+    await recordRejectedRequest(
+      primaryUserId,
+      startedAt,
+      "unauthorized: missing or invalid x-api-key header",
+    );
     return Response.json({ error: "unauthorized" }, { status: 401 });
-  }
-
-  let primaryUserId: number;
-  try {
-    primaryUserId = await resolvePrimaryUserId();
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.error("ingest rejected:", message);
-    await recordRejectedRequest(startedAt, `primary user resolution failed: ${message}`);
-    return Response.json({ error: "server is not configured for ingest" }, { status: 500 });
   }
 
   let payload: HealthExportPayload;
   try {
     payload = (await request.json()) as HealthExportPayload;
   } catch {
-    await recordRejectedRequest(startedAt, "malformed request: body is not valid JSON");
+    await recordRejectedRequest(primaryUserId, startedAt, "malformed request: body is not valid JSON");
     return Response.json({ error: "body is not valid JSON" }, { status: 400 });
   }
 
   const mapped = mapHealthExportPayload(payload);
   if (mapped.readings.length === 0 && mapped.errors.length > 0) {
     const reason = `malformed payload: ${mapped.errors.join("; ")}`;
-    await recordRejectedRequest(startedAt, reason);
+    await recordRejectedRequest(primaryUserId, startedAt, reason);
     return Response.json({ error: reason }, { status: 400 });
   }
 
@@ -119,7 +141,7 @@ export async function POST(request: Request): Promise<Response> {
     };
     runResults[source] = outcome;
     try {
-      await recordSyncRun(source, startedAt, outcome);
+      await recordSyncRun(source, primaryUserId, startedAt, outcome);
     } catch (err) {
       console.error(`failed to record sync_runs row for ${source}:`, err);
     }
