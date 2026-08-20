@@ -103,3 +103,34 @@ describe("/status — AC-WT8: sync history scoped to the signed-in user", () => 
     expect((htmlForA.match(/never/g) ?? []).length).toBe(2);
   });
 });
+
+/**
+ * AUTO-GENERATED TEST STUB — JerkAI Contract
+ * PRD Target: JerkAI — Build PRD: Nav Header Cleanup & Status Page Chrome
+ *
+ * DO NOT EDIT test names, AC IDs, or stub assertions during implementation.
+ * Implementation code must be written to satisfy these stubs.
+ * Editing stubs to fit implementation triggers a blocking finding in jerkai-falsify-diff.
+ */
+describe("/status — AC-D18: shared header chrome", () => {
+  it("AC-D18: /status renders the same NavHeader as every other gated page, with neither Weekly nor Daily active", async () => {
+    const [user] = await sql`insert into users (email) values ('status-header-test@example.com') returning id`;
+
+    const html = await renderStatusFor(user.id);
+
+    expect(html).toContain("JerkAI");
+
+    // Content AND order (AC-D18's own language) — a scramble must fail this,
+    // not just an absence, so each href's index must strictly increase.
+    const hrefs = ["/weekly", "/daily", "/settings/targets", "/log-meal", "/status"];
+    const indices = hrefs.map((href) => html.indexOf(`href="${href}"`));
+    for (const index of indices) {
+      expect(index).toBeGreaterThan(-1);
+    }
+    for (let i = 1; i < indices.length; i++) {
+      expect(indices[i]).toBeGreaterThan(indices[i - 1]);
+    }
+
+    expect(html).not.toContain('aria-current="page"');
+  });
+});

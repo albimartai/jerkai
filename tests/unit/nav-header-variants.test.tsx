@@ -45,3 +45,28 @@ describe("nav header variants (AC-AB2, NFR-61)", () => {
     expect(markup).not.toContain('aria-current="page"');
   });
 });
+
+/**
+ * AUTO-GENERATED TEST STUB — JerkAI Contract
+ * PRD Target: JerkAI — Build PRD: Nav Header Cleanup & Status Page Chrome
+ *
+ * DO NOT EDIT test names, AC IDs, or stub assertions during implementation.
+ * Implementation code must be written to satisfy these stubs.
+ * Editing stubs to fit implementation triggers a blocking finding in jerkai-falsify-diff.
+ */
+describe("nav header CTA text and outline (AC-D19, AC-D20)", () => {
+  it('AC-D19: the live variant\'s Log Meal link reads exactly "Log Meal", not "+ Log meal"', () => {
+    const markup = renderToStaticMarkup(<NavHeader variant="live" />);
+    expect(markup).toContain(">Log Meal<");
+    expect(markup).not.toContain("+ Log meal");
+  });
+
+  it("AC-D20: the live variant's Log Meal and Status links render no border, other classes unchanged", () => {
+    const markup = renderToStaticMarkup(<NavHeader variant="live" />);
+    expect(markup).not.toContain("border-zinc-200");
+    expect(markup).not.toContain("border-zinc-800");
+    expect(markup).toContain(
+      "rounded-md px-3 py-1 text-sm text-zinc-600 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-900",
+    );
+  });
+});
