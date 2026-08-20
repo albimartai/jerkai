@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
 import { getSql } from "@/lib/db";
+import { NavHeader } from "@/app/ui/nav-header";
 import { ACTIVE_SYNC_SOURCES } from "@/lib/sources";
 
 // Always query at request time — this page must reflect the live database,
@@ -40,29 +41,32 @@ export default async function Status() {
   const bySource = new Map(rows.map((row) => [row.source, row]));
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-6 font-sans">
-      <h1 className="text-lg text-zinc-500">Sync status</h1>
-      {/* One lane per LIVE pipe (see lib/sources.ts) — retired sources like
-          apple_health keep their historical sync_runs rows but no longer
-          render a permanently-stale lane here. */}
-      {ACTIVE_SYNC_SOURCES.map((source) => {
-        const row = bySource.get(source);
-        return (
-          <div key={source} className="text-center">
-            <p className="text-2xl font-semibold tracking-tight capitalize">
-              {source.replaceAll("_", " ")}
-            </p>
-            <p className="text-sm text-zinc-500">
-              Last successful sync: {row?.last_success ?? "never"}
-            </p>
-            {row && row.last_run_status !== "success" ? (
-              <p className="text-sm text-red-500">
-                Last run: {row.last_run_status} at {row.last_run_at}
+    <main className="mx-auto w-full max-w-3xl px-4 pb-10 font-sans">
+      <NavHeader />
+      <div className="flex flex-col items-center justify-center gap-6">
+        <h1 className="text-lg text-zinc-500">Sync status</h1>
+        {/* One lane per LIVE pipe (see lib/sources.ts) — retired sources like
+            apple_health keep their historical sync_runs rows but no longer
+            render a permanently-stale lane here. */}
+        {ACTIVE_SYNC_SOURCES.map((source) => {
+          const row = bySource.get(source);
+          return (
+            <div key={source} className="text-center">
+              <p className="text-2xl font-semibold tracking-tight capitalize">
+                {source.replaceAll("_", " ")}
               </p>
-            ) : null}
-          </div>
-        );
-      })}
+              <p className="text-sm text-zinc-500">
+                Last successful sync: {row?.last_success ?? "never"}
+              </p>
+              {row && row.last_run_status !== "success" ? (
+                <p className="text-sm text-red-500">
+                  Last run: {row.last_run_status} at {row.last_run_at}
+                </p>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
     </main>
   );
 }
