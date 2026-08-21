@@ -7,7 +7,7 @@ cite a fact instead of re-deriving it. It covers modules, data flow, conventions
 It deliberately does not cover product intent (`docs/context.md`), schema DDL or local setup
 (`README.md`), or process (`docs/definition-of-ready-and-done.md`).
 
-**Derived at:** commit `eb99c219fdf6923c0f4cfe555b995b5e95bc6e41`, 2026-08-20.
+**Derived at:** commit `f4d271314096db3127ec39c3766deef9c0e370ae`, 2026-08-21.
 
 **Staleness rule.** This is a snapshot of a moving target. A PRD citing it must re-verify
 the specific claims it leans on. Where a claim disagrees with the code, **the file is wrong
@@ -264,13 +264,22 @@ not in either checkout, so its ids are read from source, tests and commit subjec
 | `AC-AB` | jerkai | 9 | Demo About |
 | `AC-WT` | jerkai | 13 | Whoop Multi-Tenancy |
 | `AC-PUE` | jerkai | 4 | Primary User Email Alert Gap (`AC-PUE4` is an ops/manual check, not code-tested) |
+| `AC-PM` | jerkai | 4 | Preview Migration Gap Fix (`docs/prd/preview-migration-gap-fix.md`; all four ACs are ops/manual checks, not code-tested) |
 | `AC-MF` | jerkai-mcp | 9 | MCP metric registry, slice 1 (`AC-MF9`, the vendor drift check) |
 
 **NFR** is one ascending series **per repo**, not per-slice and not global across repos
-(DL-2026-07-31-a). In **jerkai** it is numeric, high-water mark **NFR-85**
-(`docs/prd/nav-header-cleanup-status-chrome.md`, NFR-83–85; before it, NFR-82 from
-`docs/prd/whoop-multi-tenancy.md`). In **jerkai-mcp** it is a separate lettered series,
-**NFR-A..NFR-D**, which does not continue jerkai's numbering and never will.
+(DL-2026-07-31-a). In **jerkai** it is numeric, high-water mark **NFR-97**
+(`docs/prd/preview-migration-gap-fix.md`, NFR-94–97; before it, NFR-85 from
+`docs/prd/nav-header-cleanup-status-chrome.md`, NFR-83–85, and NFR-82 from
+`docs/prd/whoop-multi-tenancy.md` before that). **NFR-86–93 are reserved, not shipped** —
+three sibling PRDs drafted alongside Nav Header Cleanup & Status Page Chrome (Weekly Ledger
+Week Column Wrap: NFR-86–87; Status Sync Local Timezone: NFR-88–91; Footer Privacy Link:
+NFR-92–93) exist in the vault but carry no repo `docs/prd/` snapshot as of this session, so
+per the "repo PRD snapshot landed" DoD item they have not shipped — this is a reservation
+by named unshipped PRDs, not a gap in this document. Preview Migration Gap Fix's NFR-94–97
+continues past that reservation rather than colliding with it. In **jerkai-mcp** it is a
+separate lettered series, **NFR-A..NFR-D**, which does not continue jerkai's numbering and
+never will.
 
 Docs-only sessions carry no PRD and no id series; they are identified by their commit
 subject and PR number. The `AC-` and `NFR-` series are unaffected and remain per-repo.
