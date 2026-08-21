@@ -7,7 +7,7 @@ cite a fact instead of re-deriving it. It covers modules, data flow, conventions
 It deliberately does not cover product intent (`docs/context.md`), schema DDL or local setup
 (`README.md`), or process (`docs/definition-of-ready-and-done.md`).
 
-**Derived at:** commit `26b3d069ab17f84e682dea074f8f4ecb12b3c2ef`, 2026-07-31.
+**Derived at:** commit `eb99c219fdf6923c0f4cfe555b995b5e95bc6e41`, 2026-08-20.
 
 **Staleness rule.** This is a snapshot of a moving target. A PRD citing it must re-verify
 the specific claims it leans on. Where a claim disagrees with the code, **the file is wrong
@@ -241,9 +241,12 @@ a stale metric registry indefinitely, with a green CI badge. The check detects l
 tampering with the vendored copies; it does not detect upstream change, and cannot. Nothing
 in either repo notices an edit to the registry here — picking one up is a deliberate human
 step in that repo: re-copy both files, bump `sha` in `vendor.lock.json`, re-run the check.
-(The lock currently names `26b3d069ab17f84e682dea074f8f4ecb12b3c2ef`, the same commit this
-file is pinned to, so the two are in sync as of this snapshot — which is exactly the state
-that stops being true silently.)
+(As of this snapshot the lock still names `26b3d069ab17f84e682dea074f8f4ecb12b3c2ef` — the
+commit this file *was* pinned to as of the 2026-07-31 snapshot, not the commit above. `main`
+has since moved without either vendored file changing, so the lock is still accurate; but
+its sha and this file's "Derived at" commit no longer being equal is normal, not a sign of
+drift — check `vendor.lock.json` directly, never infer its state from this file's own commit
+line.)
 
 ## 7. Id series in use
 
@@ -253,17 +256,20 @@ not in either checkout, so its ids are read from source, tests and commit subjec
 
 | Prefix | Repo | Highest used | Introduced by |
 |---|---|---|---|
-| `AC-D` | jerkai | 17 | v1 / v1.1 dashboard |
+| `AC-D` | jerkai | 21 | v1 dashboard (`docs/prd/archive/v1-dashboard.md`; carried forward unchanged by v1.1; AC-D18–AC-D21 added by Nav Header Cleanup & Status Page Chrome) |
 | `AC-N` | jerkai | 14 | v1.1 dashboard |
 | `AC-W` | jerkai | 12 | Weekly Ledger |
 | `AC-M` | jerkai | 35 | Log Meal and its fast-follows |
 | `AC-PD` | jerkai | 7 | Public Demo |
 | `AC-AB` | jerkai | 9 | Demo About |
+| `AC-WT` | jerkai | 13 | Whoop Multi-Tenancy |
+| `AC-PUE` | jerkai | 4 | Primary User Email Alert Gap (`AC-PUE4` is an ops/manual check, not code-tested) |
 | `AC-MF` | jerkai-mcp | 9 | MCP metric registry, slice 1 (`AC-MF9`, the vendor drift check) |
 
 **NFR** is one ascending series **per repo**, not per-slice and not global across repos
-(DL-2026-07-31-a). In **jerkai** it is numeric, high-water mark **NFR-62**
-(`docs/prd/demo-about.md`). In **jerkai-mcp** it is a separate lettered series,
+(DL-2026-07-31-a). In **jerkai** it is numeric, high-water mark **NFR-85**
+(`docs/prd/nav-header-cleanup-status-chrome.md`, NFR-83–85; before it, NFR-82 from
+`docs/prd/whoop-multi-tenancy.md`). In **jerkai-mcp** it is a separate lettered series,
 **NFR-A..NFR-D**, which does not continue jerkai's numbering and never will.
 
 Docs-only sessions carry no PRD and no id series; they are identified by their commit
