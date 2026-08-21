@@ -16,6 +16,7 @@ Baseline DoD — every item, from [docs/definition-of-ready-and-done.md](https:/
 
 - [ ] All acceptance criteria met, covered by tests authored TDD-style from the ACs
 - [ ] CI green (lint + typecheck + unit + integration on a disposable Neon branch)
+- [ ] If this PR includes a migration: applied to every persistent environment the deploy topology includes beyond CI and production — at minimum the Preview/`dev` Neon branch — state how, or who it's deferred to
 - [ ] Behind auth — no real biometric/nutrition data reachable on any public/demo route
 - [ ] Responsive — usable on a phone browser
 - [ ] Shared date key — dated data normalized to the device-local calendar day where touched

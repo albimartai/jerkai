@@ -4,7 +4,7 @@
 >
 > **Canonical source is this vault file.** The repo carries a build-time snapshot at `docs/definition-of-ready-and-done.md` (authored/refreshed by a Claude Code session), the same source-in-vault / snapshot-in-repo pattern used for build PRDs. When this standard changes, update here and re-snapshot the repo copy — do not edit the two independently.
 >
-> **Last updated:** 2026-07-26
+> **Last updated:** 2026-08-21
 
 ---
 
@@ -21,6 +21,16 @@ git checkout -b <type>/<short-name>   # e.g. feat/log-meal
 
 Do not branch from any existing feature branch, and do not reuse a leftover local branch. Confirm the new branch's base is current — `git log --oneline -1 main` should match `origin/main` — before starting work. (DL-2026-07-18-c.)
 
+## General session conduct (every session — build or docs, PRD-driven or prompt-authored)
+
+These five items exist because a run of prompt-authored, no-PRD docs sessions each bypassed `jerkai-spec` and `jerkai-falsify` entirely — this file is the only artifact every session reads regardless of how it was specified, so this is the only place a check placed here would actually have fired. Added 2026-08-21, from [[JerkAI - Build Failure Ledger]] FM-10, FM-12, FM-13, FM-14, FM-15.
+
+- [ ] **A derivation's source is checked for completeness before trusting an empty result.** When deriving a fact from a named source (e.g., an id high-water mark "derived from `docs/prd/`"), confirm that source actually covers every session/slice being asked about — a docs-only or prompt-authored session that shipped no PRD file is invisible to a `docs/prd/` grep. Cross-check against `git log` before treating a zero-match grep as "no such series exists," rather than "this is the wrong place to look." (FM-10)
+- [ ] **Spec-vs-shipped reconciliation.** Before closing a session, confirm the PRD's design-narrative claims (which module imports which, a data flow, a layering) still match what the code does — an AC can pass in full while the PRD's prose describes an internal structure the build simplified away. Check any sentence naming a specific file or import against that file directly, not against memory of what was intended. (FM-12)
+- [ ] **A scope exclusion is checked against what this session changes, not against the repo's pre-session state.** A "do not touch" list written from a stale snapshot can exclude a document that asserts exactly the facts this session is about to change, and that document then ships false in the same session that falsified it. Before finalizing scope, grep the repo for the nouns this session introduces or removes; any document matching that also appears on the exclusion list needs its exclusion re-justified, not assumed. (FM-13)
+- [ ] **A cited external id is verified by opening it, not transcribed from a prompt on trust.** A Decision Log id, PRD section, or vault entry supplied only as an id is an FM-01-class assertion — a fact about another system, stated from memory. If the citing session has no way to read the source (e.g., a repo-scoped session with no vault access), it flags the citation as unverified rather than transcribing it silently. Whoever authors the prompt should paste the actual sentence being cited, not just the id, so the claim is checkable by whoever has to ship it. (FM-14)
+- [ ] **A cross-repo tie-break rule is reconciled on both sides in the same window, or the imbalance is stated explicitly.** When two repos each keep a local snapshot of the same fact and one names the other as authoritative on disagreement, fixing only one side's copy leaves that side's own tie-break rule pointing a reader at the more-stale side. Either reconcile both sides in the same window, or state explicitly, in the corrected copy, that the tie-break currently favors the (known) stale side until the sibling repo's fast-follow lands. (FM-15)
+
 ## Definition of Ready (entry gate)
 
 A slice is ready to enter development when all of these are true:
@@ -35,6 +45,7 @@ A slice is ready to enter development when all of these are true:
 - [ ] **Design / reference artifact linked** — wireframe, hi-fi, or spec the build follows.
 - [ ] **Dev environment plan clear** — Neon dev branch, migration plan, env vars.
 - [ ] **Production migration plan clear (if the slice has a migration)** — how the migration reaches prod (the automated `migrate:prod` job once it exists, else the manual diagnose→snapshot→apply→verify release step), identified before build, not discovered at deploy (DL-2026-07-21-c).
+- [ ] **Every persistent environment the deploy topology includes has a stated migration path — not just CI and production.** CI's disposable Neon branch is migrated fresh every run by construction; production has the `migrate:prod` job (or the manual release step, above). Neither covers a persistent, non-disposable environment a hosting platform creates on its own — most concretely, whatever Neon branch Vercel Preview deployments read from. Name every such environment and state whether and how each gets migrated, even if the honest answer is "manually, owner: Albert, timing: before the next Preview click-through" — a schema-changing slice is not ready to build until this has an answer, because "CI green + production migrated" is not evidence about any environment besides those two. Added after the 2026-08-21 incident where a Preview deployment threw `NeonDbError: column "user_id" does not exist` on a query untouched by the merging PR, weeks after the migration that added that column had already shipped safely to production ([[JerkAI - Build Failure Ledger]] FM-21).
 - [ ] **Verification method known for anything CI cannot reach.** If the slice's behavior depends on deploy-time or request-time infrastructure that tests don't exercise — host/domain routing, proxy/middleware ordering, redirects, env-var-dependent branches — name how it will be verified *before* build, and prefer a locally reproducible method (production-mode server + spoofed headers) over "open it in a browser after deploy." Where the behavior spans more than one file (e.g. a `proxy.ts` matcher plus a `next.config.ts` rewrite), state the full ordered path a request takes and which file owns each step: each file can be correct in isolation while the pair fails entirely (DL-2026-07-23-a).
 
 ## Definition of Done — baseline (exit gate, every slice)
