@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { getSql } from "@/lib/db";
 import { NavHeader } from "@/app/ui/nav-header";
+import { LocalTime } from "@/app/ui/local-time";
 import { ACTIVE_SYNC_SOURCES } from "@/lib/sources";
 
 // Always query at request time — this page must reflect the live database,
@@ -11,6 +12,8 @@ export const dynamic = "force-dynamic";
 
 type SyncSummaryRow = {
   source: string;
+  // Raw ISO instants, not server-formatted strings (NFR-88) — the server
+  // can't know the viewer's timezone, so LocalTime formats these client-side.
   last_success: string | null;
   last_run_at: string | null;
   last_run_status: string | null;
@@ -28,10 +31,8 @@ export default async function Status() {
   const userId = Number(session.user.id);
   const rows = (await sql`
     select source,
-           to_char(max(coalesce(finished_at, started_at)) filter (where status = 'success')
-                   at time zone 'utc', 'YYYY-MM-DD HH24:MI "UTC"') as last_success,
-           to_char(max(coalesce(finished_at, started_at))
-                   at time zone 'utc', 'YYYY-MM-DD HH24:MI "UTC"') as last_run_at,
+           max(coalesce(finished_at, started_at)) filter (where status = 'success') as last_success,
+           max(coalesce(finished_at, started_at)) as last_run_at,
            (array_agg(status order by started_at desc))[1] as last_run_status
     from sync_runs
     where user_id = ${userId}
@@ -56,11 +57,12 @@ export default async function Status() {
                 {source.replaceAll("_", " ")}
               </p>
               <p className="text-sm text-zinc-500">
-                Last successful sync: {row?.last_success ?? "never"}
+                Last successful sync:{" "}
+                {row?.last_success ? <LocalTime iso={row.last_success} /> : "never"}
               </p>
               {row && row.last_run_status !== "success" ? (
                 <p className="text-sm text-red-500">
-                  Last run: {row.last_run_status} at {row.last_run_at}
+                  Last run: {row.last_run_status} at <LocalTime iso={row.last_run_at!} />
                 </p>
               ) : null}
             </div>
