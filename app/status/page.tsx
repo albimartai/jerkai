@@ -10,12 +10,12 @@ import { ACTIVE_SYNC_SOURCES } from "@/lib/sources";
 // never a build-time snapshot.
 export const dynamic = "force-dynamic";
 
+// The Neon driver parses timestamptz columns into Date objects, not strings
+// (OID 1184) — this is the raw shape the query actually returns.
 type SyncSummaryRow = {
   source: string;
-  // Raw ISO instants, not server-formatted strings (NFR-88) — the server
-  // can't know the viewer's timezone, so LocalTime formats these client-side.
-  last_success: string | null;
-  last_run_at: string | null;
+  last_success: Date | null;
+  last_run_at: Date | null;
   last_run_status: string | null;
 };
 
@@ -39,7 +39,18 @@ export default async function Status() {
     group by source
   `) as SyncSummaryRow[];
 
-  const bySource = new Map(rows.map((row) => [row.source, row]));
+  // Convert to ISO strings here (NFR-88's own example) rather than passing
+  // Date objects across the server/client boundary as an untyped prop.
+  const bySource = new Map(
+    rows.map((row) => [
+      row.source,
+      {
+        ...row,
+        last_success: row.last_success ? row.last_success.toISOString() : null,
+        last_run_at: row.last_run_at ? row.last_run_at.toISOString() : null,
+      },
+    ]),
+  );
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 pb-10 font-sans">
