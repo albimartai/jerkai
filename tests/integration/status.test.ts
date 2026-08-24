@@ -14,6 +14,7 @@ const authMock = vi.hoisted(() => vi.fn());
 vi.mock("@/auth", () => ({ auth: authMock }));
 
 import Status from "@/app/status/page";
+import { LocalTime } from "@/app/ui/local-time";
 
 const DATABASE_URL = process.env.DATABASE_URL ?? "";
 const CI_DATABASE = "jerkai_ci_test";
@@ -23,6 +24,30 @@ async function renderStatusFor(userId: number): Promise<string> {
   authMock.mockResolvedValue({ user: { id: String(userId) } });
   const element = await Status();
   return renderToStaticMarkup(element);
+}
+
+async function renderStatusElementFor(userId: number) {
+  authMock.mockResolvedValue({ user: { id: String(userId) } });
+  return Status();
+}
+
+// renderToStaticMarkup never fires React effects, so LocalTime — a client
+// component correctly gated behind useEffect (NFR-90) — always renders null
+// under this harness, regardless of implementation correctness. Proving
+// NFR-88 (server passes the raw instant through unmodified as a prop) means
+// inspecting the JSX tree Status() returns directly, since LocalTime's
+// content can never reach this harness's serialized HTML output.
+type ReactElementLike = { type: unknown; props?: { iso?: unknown; children?: unknown } };
+
+function isReactElementLike(node: unknown): node is ReactElementLike {
+  return typeof node === "object" && node !== null && "type" in node;
+}
+
+function collectLocalTimeIsoProps(node: unknown): string[] {
+  if (Array.isArray(node)) return node.flatMap(collectLocalTimeIsoProps);
+  if (!isReactElementLike(node)) return [];
+  const own = node.type === LocalTime && typeof node.props?.iso === "string" ? [node.props.iso] : [];
+  return [...own, ...collectLocalTimeIsoProps(node.props?.children)];
 }
 
 beforeAll(() => {
@@ -132,5 +157,76 @@ describe("/status — AC-D18: shared header chrome", () => {
     }
 
     expect(html).not.toContain('aria-current="page"');
+  });
+});
+
+/**
+ * AUTO-GENERATED TEST STUB — JerkAI Contract
+ * PRD Target: JerkAI — Build PRD: Status Sync Times — Local Timezone Display
+ *
+ * DO NOT EDIT test names, AC IDs, or stub assertions during implementation.
+ * Implementation code must be written to satisfy these stubs.
+ * Editing stubs to fit implementation triggers a blocking finding in jerkai-falsify-diff.
+ */
+describe("/status — AC-ST1/AC-ST2/AC-ST3: local-timezone timestamp display", () => {
+  it("AC-ST1 (bare case): a source with no successful sync still shows the literal 'never' text, unaffected by this slice's timezone change", async () => {
+    const [user] = await sql`insert into users (email) values ('status-tz-bare@example.com') returning id`;
+
+    const html = await renderStatusFor(user.id);
+
+    // Both ACTIVE_SYNC_SOURCES lanes ('whoop', 'fitdays') have zero sync_runs rows
+    // for this fresh user — "never" is not a timestamp and carries no timezone (§4.1).
+    expect((html.match(/never/g) ?? []).length).toBe(2);
+  });
+
+  it("AC-ST2/NFR-88: a non-null 'Last successful sync' timestamp reaches the rendered output as a raw ISO instant, never formatted or timezone-converted on the server", async () => {
+    const [user] = await sql`insert into users (email) values ('status-tz-success@example.com') returning id`;
+    const knownInstant = new Date("2026-08-19T14:30:00.000Z");
+
+    await sql`
+      insert into sync_runs (source, user_id, started_at, finished_at, status, rows_synced)
+      values ('whoop', ${user.id}, ${knownInstant.toISOString()}, ${knownInstant.toISOString()}, 'success', 5)
+    `;
+
+    const element = await renderStatusElementFor(user.id);
+    const html = renderToStaticMarkup(element);
+
+    // NFR-88's ordered path (raw instant -> prop -> client formats) means the
+    // server's own output must carry no server-baked "UTC" label...
+    expect(html).not.toContain("UTC");
+
+    // ...and LocalTime must have received the raw instant itself as a prop,
+    // unformatted and machine-parseable as a real date — proof the server
+    // stopped formatting rather than just dropped the label. LocalTime's own
+    // rendered text is unreachable here (renderToStaticMarkup never fires the
+    // mount effect NFR-90 requires), so this inspects the prop directly
+    // rather than the DOM output.
+    const isoValues = collectLocalTimeIsoProps(element);
+    expect(isoValues.length).toBeGreaterThan(0);
+    for (const iso of isoValues) {
+      expect(iso).not.toContain("UTC");
+      expect(Number.isNaN(new Date(iso).getTime())).toBe(false);
+    }
+  });
+
+  it("AC-ST3/NFR-88: a non-null 'Last run' timestamp (failure/partial status) reaches the rendered output as a raw ISO instant too, by the same mechanism as the success timestamp", async () => {
+    const [user] = await sql`insert into users (email) values ('status-tz-failure@example.com') returning id`;
+    const knownInstant = new Date("2026-08-19T03:05:00.000Z");
+
+    await sql`
+      insert into sync_runs (source, user_id, started_at, finished_at, status, rows_synced)
+      values ('fitdays', ${user.id}, ${knownInstant.toISOString()}, ${knownInstant.toISOString()}, 'failure', 0)
+    `;
+
+    const element = await renderStatusElementFor(user.id);
+    const html = renderToStaticMarkup(element);
+
+    expect(html).not.toContain("UTC");
+    const isoValues = collectLocalTimeIsoProps(element);
+    expect(isoValues.length).toBeGreaterThan(0);
+    for (const iso of isoValues) {
+      expect(iso).not.toContain("UTC");
+      expect(Number.isNaN(new Date(iso).getTime())).toBe(false);
+    }
   });
 });
