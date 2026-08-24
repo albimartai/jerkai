@@ -134,3 +134,63 @@ describe("/status — AC-D18: shared header chrome", () => {
     expect(html).not.toContain('aria-current="page"');
   });
 });
+
+/**
+ * AUTO-GENERATED TEST STUB — JerkAI Contract
+ * PRD Target: JerkAI — Build PRD: Status Sync Times — Local Timezone Display
+ *
+ * DO NOT EDIT test names, AC IDs, or stub assertions during implementation.
+ * Implementation code must be written to satisfy these stubs.
+ * Editing stubs to fit implementation triggers a blocking finding in jerkai-falsify-diff.
+ */
+describe("/status — AC-ST1/AC-ST2/AC-ST3: local-timezone timestamp display", () => {
+  it("AC-ST1 (bare case): a source with no successful sync still shows the literal 'never' text, unaffected by this slice's timezone change", async () => {
+    const [user] = await sql`insert into users (email) values ('status-tz-bare@example.com') returning id`;
+
+    const html = await renderStatusFor(user.id);
+
+    // Both ACTIVE_SYNC_SOURCES lanes ('whoop', 'fitdays') have zero sync_runs rows
+    // for this fresh user — "never" is not a timestamp and carries no timezone (§4.1).
+    expect((html.match(/never/g) ?? []).length).toBe(2);
+  });
+
+  it("AC-ST2/NFR-88: a non-null 'Last successful sync' timestamp reaches the rendered output as a raw ISO instant, never formatted or timezone-converted on the server", async () => {
+    const [user] = await sql`insert into users (email) values ('status-tz-success@example.com') returning id`;
+    const knownInstant = new Date("2026-08-19T14:30:00.000Z");
+
+    await sql`
+      insert into sync_runs (source, user_id, started_at, finished_at, status, rows_synced)
+      values ('whoop', ${user.id}, ${knownInstant.toISOString()}, ${knownInstant.toISOString()}, 'success', 5)
+    `;
+
+    const html = await renderStatusFor(user.id);
+
+    // NFR-88's ordered path (raw instant -> prop -> client formats) means the
+    // server's own output must carry no server-baked "UTC" label...
+    expect(html).not.toContain("UTC");
+
+    // ...and must instead carry the raw instant itself, machine-parseable as a
+    // real date — proof the server stopped formatting rather than just dropped
+    // the label.
+    const isoMatch = html.match(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/);
+    expect(isoMatch).not.toBeNull();
+    expect(Number.isNaN(new Date(isoMatch![0]).getTime())).toBe(false);
+  });
+
+  it("AC-ST3/NFR-88: a non-null 'Last run' timestamp (failure/partial status) reaches the rendered output as a raw ISO instant too, by the same mechanism as the success timestamp", async () => {
+    const [user] = await sql`insert into users (email) values ('status-tz-failure@example.com') returning id`;
+    const knownInstant = new Date("2026-08-19T03:05:00.000Z");
+
+    await sql`
+      insert into sync_runs (source, user_id, started_at, finished_at, status, rows_synced)
+      values ('fitdays', ${user.id}, ${knownInstant.toISOString()}, ${knownInstant.toISOString()}, 'failure', 0)
+    `;
+
+    const html = await renderStatusFor(user.id);
+
+    expect(html).not.toContain("UTC");
+    const isoMatch = html.match(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/);
+    expect(isoMatch).not.toBeNull();
+    expect(Number.isNaN(new Date(isoMatch![0]).getTime())).toBe(false);
+  });
+});
