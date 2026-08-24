@@ -14,6 +14,7 @@ const authMock = vi.hoisted(() => vi.fn());
 vi.mock("@/auth", () => ({ auth: authMock }));
 
 import Status from "@/app/status/page";
+import { LocalTime } from "@/app/ui/local-time";
 
 const DATABASE_URL = process.env.DATABASE_URL ?? "";
 const CI_DATABASE = "jerkai_ci_test";
@@ -23,6 +24,30 @@ async function renderStatusFor(userId: number): Promise<string> {
   authMock.mockResolvedValue({ user: { id: String(userId) } });
   const element = await Status();
   return renderToStaticMarkup(element);
+}
+
+async function renderStatusElementFor(userId: number) {
+  authMock.mockResolvedValue({ user: { id: String(userId) } });
+  return Status();
+}
+
+// renderToStaticMarkup never fires React effects, so LocalTime — a client
+// component correctly gated behind useEffect (NFR-90) — always renders null
+// under this harness, regardless of implementation correctness. Proving
+// NFR-88 (server passes the raw instant through unmodified as a prop) means
+// inspecting the JSX tree Status() returns directly, since LocalTime's
+// content can never reach this harness's serialized HTML output.
+type ReactElementLike = { type: unknown; props?: { iso?: unknown; children?: unknown } };
+
+function isReactElementLike(node: unknown): node is ReactElementLike {
+  return typeof node === "object" && node !== null && "type" in node;
+}
+
+function collectLocalTimeIsoProps(node: unknown): string[] {
+  if (Array.isArray(node)) return node.flatMap(collectLocalTimeIsoProps);
+  if (!isReactElementLike(node)) return [];
+  const own = node.type === LocalTime && typeof node.props?.iso === "string" ? [node.props.iso] : [];
+  return [...own, ...collectLocalTimeIsoProps(node.props?.children)];
 }
 
 beforeAll(() => {
@@ -163,18 +188,25 @@ describe("/status — AC-ST1/AC-ST2/AC-ST3: local-timezone timestamp display", (
       values ('whoop', ${user.id}, ${knownInstant.toISOString()}, ${knownInstant.toISOString()}, 'success', 5)
     `;
 
-    const html = await renderStatusFor(user.id);
+    const element = await renderStatusElementFor(user.id);
+    const html = renderToStaticMarkup(element);
 
     // NFR-88's ordered path (raw instant -> prop -> client formats) means the
     // server's own output must carry no server-baked "UTC" label...
     expect(html).not.toContain("UTC");
 
-    // ...and must instead carry the raw instant itself, machine-parseable as a
-    // real date — proof the server stopped formatting rather than just dropped
-    // the label.
-    const isoMatch = html.match(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/);
-    expect(isoMatch).not.toBeNull();
-    expect(Number.isNaN(new Date(isoMatch![0]).getTime())).toBe(false);
+    // ...and LocalTime must have received the raw instant itself as a prop,
+    // unformatted and machine-parseable as a real date — proof the server
+    // stopped formatting rather than just dropped the label. LocalTime's own
+    // rendered text is unreachable here (renderToStaticMarkup never fires the
+    // mount effect NFR-90 requires), so this inspects the prop directly
+    // rather than the DOM output.
+    const isoValues = collectLocalTimeIsoProps(element);
+    expect(isoValues.length).toBeGreaterThan(0);
+    for (const iso of isoValues) {
+      expect(iso).not.toContain("UTC");
+      expect(Number.isNaN(new Date(iso).getTime())).toBe(false);
+    }
   });
 
   it("AC-ST3/NFR-88: a non-null 'Last run' timestamp (failure/partial status) reaches the rendered output as a raw ISO instant too, by the same mechanism as the success timestamp", async () => {
@@ -186,11 +218,15 @@ describe("/status — AC-ST1/AC-ST2/AC-ST3: local-timezone timestamp display", (
       values ('fitdays', ${user.id}, ${knownInstant.toISOString()}, ${knownInstant.toISOString()}, 'failure', 0)
     `;
 
-    const html = await renderStatusFor(user.id);
+    const element = await renderStatusElementFor(user.id);
+    const html = renderToStaticMarkup(element);
 
     expect(html).not.toContain("UTC");
-    const isoMatch = html.match(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/);
-    expect(isoMatch).not.toBeNull();
-    expect(Number.isNaN(new Date(isoMatch![0]).getTime())).toBe(false);
+    const isoValues = collectLocalTimeIsoProps(element);
+    expect(isoValues.length).toBeGreaterThan(0);
+    for (const iso of isoValues) {
+      expect(iso).not.toContain("UTC");
+      expect(Number.isNaN(new Date(iso).getTime())).toBe(false);
+    }
   });
 });
