@@ -67,7 +67,7 @@ function WeekRowContent({ row }: { row: WeekRow }) {
         row.inProgress ? "italic text-zinc-500 dark:text-zinc-400" : ""
       }`}
     >
-      <span className="truncate text-xs font-medium uppercase tracking-wide text-zinc-500">
+      <span className="text-xs font-medium uppercase tracking-wide text-zinc-500">
         {label}
       </span>
       <Cell cell={row.columns.bodyFat} unit="pp" />
