@@ -7,7 +7,7 @@ cite a fact instead of re-deriving it. It covers modules, data flow, conventions
 It deliberately does not cover product intent (`docs/context.md`), schema DDL or local setup
 (`README.md`), or process (`docs/definition-of-ready-and-done.md`).
 
-**Derived at:** commit `f4d271314096db3127ec39c3766deef9c0e370ae`, 2026-08-21.
+**Derived at:** commit `17e5948` (branch `feat/weekly-ledger-week-column-wrap`, pre-merge), 2026-08-24.
 
 **Staleness rule.** This is a snapshot of a moving target. A PRD citing it must re-verify
 the specific claims it leans on. Where a claim disagrees with the code, **the file is wrong
@@ -258,7 +258,7 @@ not in either checkout, so its ids are read from source, tests and commit subjec
 |---|---|---|---|
 | `AC-D` | jerkai | 21 | v1 dashboard (`docs/prd/archive/v1-dashboard.md`; carried forward unchanged by v1.1; AC-D18–AC-D21 added by Nav Header Cleanup & Status Page Chrome) |
 | `AC-N` | jerkai | 14 | v1.1 dashboard |
-| `AC-W` | jerkai | 12 | Weekly Ledger |
+| `AC-W` | jerkai | 15 | Weekly Ledger (`docs/prd/archive/weekly-ledger.md`; AC-W13–AC-W15 added by Weekly Ledger Week Column Wrap, `docs/prd/weekly-ledger-week-column-wrap.md`) |
 | `AC-M` | jerkai | 35 | Log Meal and its fast-follows |
 | `AC-PD` | jerkai | 7 | Public Demo |
 | `AC-AB` | jerkai | 9 | Demo About |
@@ -271,13 +271,15 @@ not in either checkout, so its ids are read from source, tests and commit subjec
 (DL-2026-07-31-a). In **jerkai** it is numeric, high-water mark **NFR-97**
 (`docs/prd/preview-migration-gap-fix.md`, NFR-94–97; before it, NFR-85 from
 `docs/prd/nav-header-cleanup-status-chrome.md`, NFR-83–85, and NFR-82 from
-`docs/prd/whoop-multi-tenancy.md` before that). **NFR-86–93 are reserved, not shipped** —
-three sibling PRDs drafted alongside Nav Header Cleanup & Status Page Chrome (Weekly Ledger
-Week Column Wrap: NFR-86–87; Status Sync Local Timezone: NFR-88–91; Footer Privacy Link:
-NFR-92–93) exist in the vault but carry no repo `docs/prd/` snapshot as of this session, so
-per the "repo PRD snapshot landed" DoD item they have not shipped — this is a reservation
-by named unshipped PRDs, not a gap in this document. Preview Migration Gap Fix's NFR-94–97
-continues past that reservation rather than colliding with it. In **jerkai-mcp** it is a
+`docs/prd/whoop-multi-tenancy.md` before that). **NFR-86–87 shipped** via Weekly Ledger Week
+Column Wrap (`docs/prd/weekly-ledger-week-column-wrap.md`) — the high-water mark stays
+NFR-97 since this slice claimed no new ids beyond its own prior reservation. **NFR-88–93
+remain reserved, not shipped** — two sibling PRDs drafted alongside Nav Header Cleanup &
+Status Page Chrome (Status Sync Local Timezone: NFR-88–91; Footer Privacy Link: NFR-92–93)
+exist in the vault but carry no repo `docs/prd/` snapshot as of this session, so per the
+"repo PRD snapshot landed" DoD item they have not shipped — this is a reservation by named
+unshipped PRDs, not a gap in this document. Preview Migration Gap Fix's NFR-94–97 continues
+past that reservation rather than colliding with it. In **jerkai-mcp** it is a
 separate lettered series, **NFR-A..NFR-D**, which does not continue jerkai's numbering and
 never will.
 
