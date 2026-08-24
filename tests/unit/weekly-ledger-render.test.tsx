@@ -1,3 +1,11 @@
+/**
+ * AUTO-GENERATED TEST STUB — JerkAI Contract
+ * PRD Target: JerkAI — Build PRD: Weekly Ledger Week Column Readability (Text Wrap)
+ *
+ * DO NOT EDIT test names, AC IDs, or stub assertions during implementation.
+ * Implementation code must be written to satisfy these stubs.
+ * Editing stubs to fit implementation triggers a blocking finding in jerkai-falsify-diff.
+ */
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { vi } from "vitest";
@@ -173,5 +181,45 @@ describe("WeeklyLedger — cold start (AC-W9)", () => {
       2,
     );
     expect(markup).not.toContain("ledger builds as weeks complete");
+  });
+});
+
+// Extracts the class attribute of the label <span> immediately wrapping the
+// given exact label text, so tests can assert on that span's className
+// without depending on unrelated markup elsewhere in the row.
+function labelSpanClassName(markup: string, labelText: string): string | null {
+  const escaped = labelText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = markup.match(new RegExp(`<span class="([^"]*)">${escaped}</span>`));
+  return match ? match[1] : null;
+}
+
+describe("WeeklyLedger — week column readability (AC-W13, AC-W14)", () => {
+  it("AC-W13 (bare case): the in-progress row's full label is present and its span carries no truncating class", () => {
+    const inProgress: WeekRow = {
+      weekStart: "2026-07-20",
+      weekEnd: "2026-07-26",
+      inProgress: true,
+      daysElapsed: 4,
+      isGap: false,
+      columns: completedWeek("x", "y").columns,
+    };
+    const markup = render([inProgress, completedWeek("2026-07-13", "2026-07-19")], 2);
+
+    expect(markup).toContain("this week · 4 of 7 days");
+
+    const className = labelSpanClassName(markup, "this week · 4 of 7 days");
+    expect(className).not.toBeNull();
+    expect(className).not.toContain("truncate");
+  });
+
+  it("AC-W14 (regression): a completed week's date-range label text and row order are unaffected by the label-span class change", () => {
+    const rows = [
+      completedWeek("2026-07-13", "2026-07-19"),
+      completedWeek("2026-07-06", "2026-07-12"),
+    ];
+    const markup = render(rows, 2);
+
+    expect(markup).toContain("Jul 13–Jul 19");
+    expect(markup.indexOf("Jul 13")).toBeLessThan(markup.indexOf("Jul 6"));
   });
 });
