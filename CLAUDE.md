@@ -1,9 +1,6 @@
 @AGENTS.md
 @docs/context.md
 @docs/definition-of-ready-and-done.md
-@docs/prd/extend-signin-allowlist.md
-@docs/prd/primary-user-email-alert-gap.md
-@docs/prd/status-sync-local-timezone.md
 
 <!--
 Shipped Build PRDs are NOT imported here. They live at docs/prd/ (and docs/prd/archive/
