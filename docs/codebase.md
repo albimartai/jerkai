@@ -266,7 +266,7 @@ not in either checkout, so its ids are read from source, tests and commit subjec
 | `AC-PUE` | jerkai | 4 | Primary User Email Alert Gap (`AC-PUE4` is an ops/manual check, not code-tested) |
 | `AC-PM` | jerkai | 4 | Preview Migration Gap Fix (`docs/prd/preview-migration-gap-fix.md`; all four ACs are ops/manual checks, not code-tested) |
 | `AC-ST` | jerkai | 4 | Status Sync Times — Local Timezone (`docs/prd/status-sync-local-timezone.md`, PR #31, shipped 2026-08-24) |
-| `AC-FT` | jerkai | 4 | Footer Privacy Policy Link (`docs/prd/footer-privacy-link.md`; `AC-FT3`/`AC-FT4` are regression checks satisfied by existing/full-suite test runs, not new assertions) |
+| `AC-FT` | jerkai | 4 | Footer Privacy Policy Link (`docs/prd/footer-privacy-link.md`; `AC-FT3`/`AC-FT4` are regression checks satisfied by existing/full-suite test runs, not new assertions). The NFR-92 no-duplication test checks `href="/privacy"`/`<footer` rather than the PRD §6 text's literal `"Privacy Policy"` substring — a bare substring check would false-positive against `app/privacy/page.tsx`'s own `<h1>Privacy Policy</h1>`, so the as-built check is the correct one. |
 | `AC-MF` | jerkai-mcp | 9 | MCP metric registry, slice 1 (`AC-MF9`, the vendor drift check) |
 
 **NFR** is one ascending series **per repo**, not per-slice and not global across repos
