@@ -12,8 +12,8 @@
 // activity: a pipe that dies completely stops writing sync_runs rows at all,
 // and a display driven by recent activity would silently hide that dead lane
 // — the exact failure /status exists to surface.
-export const READING_SOURCES = ["fitdays", "whoop", "apple_health"] as const;
+export const READING_SOURCES = ["fitdays", "whoop", "apple_health", "withings"] as const;
 
 export type ReadingSource = (typeof READING_SOURCES)[number];
 
-export const ACTIVE_SYNC_SOURCES = ["fitdays", "whoop"] as const;
+export const ACTIVE_SYNC_SOURCES = ["fitdays", "whoop", "withings"] as const;

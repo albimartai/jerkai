@@ -19,6 +19,10 @@ import { auth } from "@/auth";
 //   - /api/whoop/sync: Vercel Cron target — cron invocations carry no
 //     session cookie and never follow redirects; it has its own CRON_SECRET
 //     bearer auth. Exact match.
+//   - /api/withings/callback, /api/withings/sync: same reasoning as their
+//     Whoop counterparts above (AC-WS20/NFR-108) — Withings' own OAuth
+//     redirect and Vercel Cron's bearer-authorized sync call each carry no
+//     session cookie. Exact match, so /api/withings/connect STAYS gated.
 //   - /signin: where unauthenticated visitors land
 //   - /privacy: public privacy policy (WHOOP's OAuth consent flow links to
 //     it, so it must render without a session). Excluded with `privacy$` —
@@ -80,6 +84,6 @@ export default function proxy(request: NextRequest, event: NextFetchEvent) {
 
 export const config = {
   matcher: [
-    "/((?!api/ingest|api/auth|api/whoop/callback$|api/whoop/sync$|signin|privacy$|demo(?:$|/)|_next/static|_next/image|favicon.ico).*)",
+    "/((?!api/ingest|api/auth|api/whoop/callback$|api/whoop/sync$|api/withings/callback$|api/withings/sync$|signin|privacy$|demo(?:$|/)|_next/static|_next/image|favicon.ico).*)",
   ],
 };

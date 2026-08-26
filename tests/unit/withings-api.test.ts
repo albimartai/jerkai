@@ -60,7 +60,10 @@ describe("apiGet — 429/rate-limit response handling (AC-WS9, NFR-101)", () => 
 
     const result = await apiGet("/measure", "access-token", { action: "getmeas" });
     expect(calls).toBe(2);
-    expect(result).toEqual({ status: 0, body: { measuregrps: [] } });
+    // apiGet unwraps the {status, body} envelope and returns body itself
+    // (its callers — fetchMeasureGroups/mapWithingsData — read
+    // measuregrps/timezone directly, never the raw envelope).
+    expect(result).toEqual({ measuregrps: [] });
   });
 
   it("AC-WS9: surfaces a second consecutive 429 as a thrown error rather than retrying unboundedly", async () => {
