@@ -23,6 +23,15 @@ import { exchangeCode, isFirstConnect, saveTokens } from "@/lib/withings-oauth";
 // route's own maxDuration budget. A reconnect (row already existed) redirects
 // the same way, with no backfill re-triggered.
 
+// after()'s callback (triggerBackfill, below) awaits the full backfill
+// fetch to /api/withings/sync before this invocation is allowed to end
+// (Vercel's waitUntil keeps it alive that long) — after() runs within THIS
+// route's own duration budget, not the sync route's (per Next's own after()
+// docs). Without matching the sync route's maxDuration here too, a slow
+// first-connect backfill could be killed mid-flight by this route's
+// (shorter) default budget before the awaited fetch ever completes.
+export const maxDuration = 60;
+
 function matches(a: string, b: string): boolean {
   // Hash both sides so timingSafeEqual gets equal-length buffers.
   return timingSafeEqual(
