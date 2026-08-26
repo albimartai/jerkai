@@ -76,6 +76,7 @@ beforeEach(async () => {
   await sql`delete from whoop_workouts`;
   await sql`delete from sync_runs`;
   await sql`delete from whoop_tokens`;
+  await sql`delete from withings_tokens`;
   await sql`delete from users`;
 });
 
@@ -228,5 +229,41 @@ describe("/status — AC-ST1/AC-ST2/AC-ST3: local-timezone timestamp display", (
       expect(iso).not.toContain("UTC");
       expect(Number.isNaN(new Date(iso).getTime())).toBe(false);
     }
+  });
+});
+
+/**
+ * AUTO-GENERATED TEST STUB — JerkAI Contract
+ * PRD Target: JerkAI — Build PRD: Withings Smart-Scale Integration
+ *
+ * DO NOT EDIT test names, AC IDs, or stub assertions during implementation.
+ * Implementation code must be written to satisfy these stubs.
+ * Editing stubs to fit implementation triggers a blocking finding in jerkai-falsify-diff.
+ */
+describe("/status — AC-WS13: a connected user's own Withings sync history", () => {
+  it("AC-WS13: a signed-in user with a connected Withings account sees their own Withings lane, achieved solely by ACTIVE_SYNC_SOURCES gaining 'withings' (no other change to this page)", async () => {
+    const [user] = await sql`insert into users (email) values ('status-withings-test@example.com') returning id`;
+
+    await sql`
+      insert into sync_runs (source, user_id, started_at, finished_at, status, rows_synced)
+      values ('withings', ${user.id}, now(), now(), 'success', 3)
+    `;
+
+    const html = await renderStatusFor(user.id);
+    expect(html).toMatch(/withings/i);
+    expect(html).not.toMatch(/failure/i);
+  });
+
+  it("AC-WS13: a Withings sync failure for one user is never shown on another user's /status page", async () => {
+    const [userA] = await sql`insert into users (email) values ('status-withings-a@example.com') returning id`;
+    const [userB] = await sql`insert into users (email) values ('status-withings-b@example.com') returning id`;
+
+    await sql`
+      insert into sync_runs (source, user_id, started_at, finished_at, status, rows_synced)
+      values ('withings', ${userB.id}, now(), now(), 'failure', 0)
+    `;
+
+    const htmlForA = await renderStatusFor(userA.id);
+    expect(htmlForA).not.toMatch(/failure/i);
   });
 });

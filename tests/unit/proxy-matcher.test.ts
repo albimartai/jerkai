@@ -91,6 +91,35 @@ describe("proxy matcher", () => {
   });
 });
 
+/**
+ * AUTO-GENERATED TEST STUB — JerkAI Contract
+ * PRD Target: JerkAI — Build PRD: Withings Smart-Scale Integration
+ *
+ * DO NOT EDIT test names, AC IDs, or stub assertions during implementation.
+ * Implementation code must be written to satisfy these stubs.
+ * Editing stubs to fit implementation triggers a blocking finding in jerkai-falsify-diff.
+ */
+describe("proxy matcher — AC-WS20: Withings callback/sync session-gate exclusion", () => {
+  it.each(["/api/withings/callback", "/api/withings/sync"])(
+    "AC-WS20 (bare case): leaves %s reachable without a session, mirroring the existing api/whoop/callback$/api/whoop/sync$ exemptions",
+    (pathname) => {
+      expect(gated(pathname)).toBe(false);
+    },
+  );
+
+  it.each([
+    // Only a signed-in session may INITIATE a Withings connection — the
+    // callback/sync exclusions must be exact matches and must not leak here,
+    // same discipline as the existing Whoop connect/callback/sync cases.
+    "/api/withings/connect",
+    "/api/withings/callback/extra",
+    "/api/withings/sync-anything",
+    "/api/withings",
+  ])("AC-WS20: keeps %s behind the session gate (exact-match discipline, no leak)", (pathname) => {
+    expect(gated(pathname)).toBe(true);
+  });
+});
+
 // The path-only matcher above cannot express "any path under this host is
 // public" — middleware evaluates its matcher against the request's ORIGINAL
 // incoming path, which for a demo.jerkai.app visitor is "/" (or "/weekly",
