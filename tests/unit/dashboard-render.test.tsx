@@ -54,6 +54,7 @@ function fixture(days: number, overrides: Partial<DashboardData> = {}): Dashboar
       ...overrides.units,
     },
     latestDay: axis[axis.length - 1],
+    resolvedScaleSource: "resolvedScaleSource" in overrides ? overrides.resolvedScaleSource! : "fitdays",
   };
 }
 

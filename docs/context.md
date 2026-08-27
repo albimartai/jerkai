@@ -14,7 +14,7 @@ North star: **body fat % trend** (7-day and 30-day rolling average) as the decis
   what's entered; it does not estimate macros — that happens outside the app.
 - **Training** — *driver* — **Whoop Day Strain (Cycle Strain, 0–21)**, from the Whoop API. NOT workout-log tonnage (tonnage is permanently not a dashboard metric).
 - **Recovery Score** — *guardrail* — Whoop's own Recovery Score, via the direct Whoop API. Surfaced as a guardrail readout plus a strip inside the collapsible Whoop detail, not a main-stack strip (decision DL-2026-07-18-a).
-- **Lean body mass** — *guardrail* — from Fitdays via Apple Health. Surfaced as a main-stack strip plus a 30-day-change readout.
+- **Lean body mass** — *guardrail* — from the user's active smart-scale source (Fitdays via Apple Health, or Withings — resolved per user, never blended, `docs/prd/dashboard-multi-source-metric-resolution-and-tagging.md`). Surfaced as a main-stack strip plus a 30-day-change readout.
 - **HRV** — *guardrail* — from the Whoop API. Surfaced inside the collapsible Whoop
   detail (DL-2026-08-03-a2).
 - **RHR** — *guardrail* — from the Whoop API. Surfaced inside the collapsible Whoop
@@ -23,7 +23,7 @@ North star: **body fat % trend** (7-day and 30-day rolling average) as the decis
 A fourth role, **tracked**, names a metric that is ingested and shown but is
 deliberately outside the driver tree (DL-2026-08-03-a1):
 
-- **Weight** — *tracked* — from Fitdays via Apple Health. Shown as a main-stack strip
+- **Weight** — *tracked* — from the user's active smart-scale source (Fitdays via Apple Health, or Withings — resolved per user, `docs/prd/dashboard-multi-source-metric-resolution-and-tagging.md`). Shown as a main-stack strip
   (decision DL-2026-07-18-b), formalized to `tracked` DL-2026-08-03-a2.
 - **Sleep duration** — *tracked* — from the Whoop API. Surfaced inside the collapsible
   Whoop detail.
@@ -60,16 +60,18 @@ Stacked strips on one shared date axis; hover scrubs a crosshair across all stri
 same day. One rendering rule everywhere: raw daily values are low-emphasis dots and the
 7-day rolling line is the dominant mark — no strip renders a raw daily line as its primary
 mark (the calories strip, below, is the one deliberate exception). **Main stack (top →
-bottom):** Body fat % (raw dots + 7d/30d lines, tallest) → Weight (Fitdays) → Day Strain
+bottom):** Body fat % (raw dots + 7d/30d lines, tallest) → Weight (active smart-scale source,
+Fitdays or Withings) → Day Strain
 trend (driver · Whoop, 7d line over faint 0–21 dailies) → **Calories vs target (driver ·
-manual, daily bars — Log Meal)** → Lean body mass (guardrail · Fitdays) → guardrail readout
+manual, daily bars — Log Meal)** → Lean body mass (guardrail · active smart-scale source) → guardrail readout
 row (lean-mass 30-day change + Recovery Score 7-day summary) → collapsible Whoop detail
 (HRV, RHR, sleep, Recovery Score). Five charts render with the Whoop detail collapsed. The
 hero stall badge shown here is the same one described above.
 - **Recovery Score is a readout, not a main-stack strip.** It surfaces as a guardrail
   readout (7-day average + red-zone-day count) and as a full strip inside the collapsible
   Whoop detail. Demoted from the v1 main stack (decision DL-2026-07-18-a).
-- **Weight is a main-stack strip** (Fitdays, already ingested), added below body fat
+- **Weight is a main-stack strip** (active smart-scale source — Fitdays or Withings,
+  resolved per user, `docs/prd/dashboard-multi-source-metric-resolution-and-tagging.md`), added below body fat
   (decision DL-2026-07-18-b). It carries the `tracked` role (DL-2026-08-03-a1/-a2) — a
   strip in its own right, not a north-star/driver/guardrail metric.
 - **Calories-vs-target strip** (Log Meal, `docs/prd/archive/log-meal.md`): daily bars colored

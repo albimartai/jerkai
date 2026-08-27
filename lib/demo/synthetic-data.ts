@@ -126,6 +126,9 @@ export const DEMO_DASHBOARD_DATA: DashboardData = {
     sleepDuration: "hr",
   },
   latestDay: LATEST_DAY,
+  // All-synthetic-Fitdays data (docs/prd/dashboard-multi-source-metric-resolution-and-tagging.md,
+  // AC-DR9) — matches /demo/daily's static "Fitdays"/"Guardrail · Fitdays" tags.
+  resolvedScaleSource: "fitdays",
 };
 
 // One target in force for the whole window (effective before the axis

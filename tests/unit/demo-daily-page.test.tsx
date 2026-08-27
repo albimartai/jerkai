@@ -55,17 +55,20 @@ describe("demo daily page (AC-PD2, AC-PD4)", () => {
 describe("demo daily page — Weight/Body fat/Lean body mass tags unchanged (AC-DR9)", () => {
   it('AC-DR9: Weight keeps its static "Fitdays" tag and Lean body mass keeps its static "Guardrail · Fitdays" tag', () => {
     return renderDemoDaily().then((markup) => {
+      // A strip's own label/tag renders BEFORE its own data-chart marker, in
+      // the region between the PRECEDING strip's marker and this one's own
+      // (mirroring the labelRegion helper in tests/unit/dashboard-render.test.tsx).
+      const bodyFatStart = markup.indexOf('data-chart="bodyFat"');
       const weightStart = markup.indexOf('data-chart="weight"');
-      const strainStart = markup.indexOf('data-chart="strain"');
-      expect(weightStart).toBeGreaterThan(-1);
-      expect(strainStart).toBeGreaterThan(weightStart);
-      expect(markup.slice(weightStart, strainStart)).toContain("Fitdays");
+      expect(bodyFatStart).toBeGreaterThan(-1);
+      expect(weightStart).toBeGreaterThan(bodyFatStart);
+      expect(markup.slice(bodyFatStart, weightStart)).toContain("Fitdays");
 
+      const caloriesStart = markup.indexOf('data-chart="calories"');
       const leanMassStart = markup.indexOf('data-chart="leanMass"');
-      const hrvStart = markup.indexOf('data-chart="hrv"');
-      expect(leanMassStart).toBeGreaterThan(-1);
-      const leanMassRegion =
-        hrvStart === -1 ? markup.slice(leanMassStart) : markup.slice(leanMassStart, hrvStart);
+      expect(caloriesStart).toBeGreaterThan(-1);
+      expect(leanMassStart).toBeGreaterThan(caloriesStart);
+      const leanMassRegion = markup.slice(caloriesStart, leanMassStart);
       expect(leanMassRegion).toContain("Guardrail");
       expect(leanMassRegion).toContain("Fitdays");
     });
