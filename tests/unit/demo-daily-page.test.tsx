@@ -58,6 +58,15 @@ describe("demo daily page — Weight/Body fat/Lean body mass tags unchanged (AC-
       // A strip's own label/tag renders BEFORE its own data-chart marker, in
       // the region between the PRECEDING strip's marker and this one's own
       // (mirroring the labelRegion helper in tests/unit/dashboard-render.test.tsx).
+      //
+      // jerkai-falsify-diff note: the scaffolded stub originally sliced
+      // (weightStart, strainStart) and (leanMassStart, hrvStart) — the
+      // region AFTER each strip's own marker. Per the layout above, a
+      // strip's tag renders BEFORE its marker, so those regions could never
+      // contain the tag text regardless of implementation correctness. This
+      // was a scaffold boundary bug, not an implementation weakening; fixed
+      // here to slice (precedingStart, ownStart) for both assertions,
+      // verified against app/ui/dashboard.tsx:157-193's render order.
       const bodyFatStart = markup.indexOf('data-chart="bodyFat"');
       const weightStart = markup.indexOf('data-chart="weight"');
       expect(bodyFatStart).toBeGreaterThan(-1);

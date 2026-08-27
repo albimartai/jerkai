@@ -1,7 +1,6 @@
 @AGENTS.md
 @docs/context.md
 @docs/definition-of-ready-and-done.md
-@docs/prd/dashboard-multi-source-metric-resolution-and-tagging.md
 
 <!--
 Shipped Build PRDs are NOT imported here. They live at docs/prd/ (and docs/prd/archive/
