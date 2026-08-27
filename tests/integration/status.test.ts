@@ -76,6 +76,7 @@ beforeEach(async () => {
   await sql`delete from whoop_workouts`;
   await sql`delete from sync_runs`;
   await sql`delete from whoop_tokens`;
+  await sql`delete from withings_tokens`;
   await sql`delete from users`;
 });
 
@@ -123,9 +124,15 @@ describe("/status — AC-WT8: sync history scoped to the signed-in user", () => 
 
     const htmlForA = await renderStatusFor(userA.id);
     expect(htmlForA).not.toMatch(/failure/i);
-    // Both ACTIVE_SYNC_SOURCES lanes ('whoop', 'fitdays') must read "never" for
-    // userA — an unscoped query would leak userB's success date into one of them.
-    expect((htmlForA.match(/never/g) ?? []).length).toBe(2);
+    // Every ACTIVE_SYNC_SOURCES lane must read "never" for userA — an
+    // unscoped query would leak userB's success date into one of them.
+    // Count updated 2->3 (PRD-authorized exception to this block's own
+    // DO-NOT-EDIT header, mirroring the precedent in
+    // tests/integration/whoop-sync.test.ts's own retired-block comment):
+    // the Withings Smart-Scale Integration PRD (§1, AC-WS13) adds
+    // 'withings' to ACTIVE_SYNC_SOURCES, which is what makes this literal
+    // count derive from the registry rather than an independent fact.
+    expect((htmlForA.match(/never/g) ?? []).length).toBe(3);
   });
 });
 
@@ -174,9 +181,13 @@ describe("/status — AC-ST1/AC-ST2/AC-ST3: local-timezone timestamp display", (
 
     const html = await renderStatusFor(user.id);
 
-    // Both ACTIVE_SYNC_SOURCES lanes ('whoop', 'fitdays') have zero sync_runs rows
-    // for this fresh user — "never" is not a timestamp and carries no timezone (§4.1).
-    expect((html.match(/never/g) ?? []).length).toBe(2);
+    // Every ACTIVE_SYNC_SOURCES lane has zero sync_runs rows for this fresh
+    // user — "never" is not a timestamp and carries no timezone (§4.1).
+    // Count updated 2->3 (PRD-authorized exception to this block's own
+    // DO-NOT-EDIT header, same reasoning as the AC-WT8 block above): the
+    // Withings Smart-Scale Integration PRD (§1, AC-WS13) adds 'withings' to
+    // ACTIVE_SYNC_SOURCES.
+    expect((html.match(/never/g) ?? []).length).toBe(3);
   });
 
   it("AC-ST2/NFR-88: a non-null 'Last successful sync' timestamp reaches the rendered output as a raw ISO instant, never formatted or timezone-converted on the server", async () => {
@@ -228,5 +239,41 @@ describe("/status — AC-ST1/AC-ST2/AC-ST3: local-timezone timestamp display", (
       expect(iso).not.toContain("UTC");
       expect(Number.isNaN(new Date(iso).getTime())).toBe(false);
     }
+  });
+});
+
+/**
+ * AUTO-GENERATED TEST STUB — JerkAI Contract
+ * PRD Target: JerkAI — Build PRD: Withings Smart-Scale Integration
+ *
+ * DO NOT EDIT test names, AC IDs, or stub assertions during implementation.
+ * Implementation code must be written to satisfy these stubs.
+ * Editing stubs to fit implementation triggers a blocking finding in jerkai-falsify-diff.
+ */
+describe("/status — AC-WS13: a connected user's own Withings sync history", () => {
+  it("AC-WS13: a signed-in user with a connected Withings account sees their own Withings lane, achieved solely by ACTIVE_SYNC_SOURCES gaining 'withings' (no other change to this page)", async () => {
+    const [user] = await sql`insert into users (email) values ('status-withings-test@example.com') returning id`;
+
+    await sql`
+      insert into sync_runs (source, user_id, started_at, finished_at, status, rows_synced)
+      values ('withings', ${user.id}, now(), now(), 'success', 3)
+    `;
+
+    const html = await renderStatusFor(user.id);
+    expect(html).toMatch(/withings/i);
+    expect(html).not.toMatch(/failure/i);
+  });
+
+  it("AC-WS13: a Withings sync failure for one user is never shown on another user's /status page", async () => {
+    const [userA] = await sql`insert into users (email) values ('status-withings-a@example.com') returning id`;
+    const [userB] = await sql`insert into users (email) values ('status-withings-b@example.com') returning id`;
+
+    await sql`
+      insert into sync_runs (source, user_id, started_at, finished_at, status, rows_synced)
+      values ('withings', ${userB.id}, now(), now(), 'failure', 0)
+    `;
+
+    const htmlForA = await renderStatusFor(userA.id);
+    expect(htmlForA).not.toMatch(/failure/i);
   });
 });
