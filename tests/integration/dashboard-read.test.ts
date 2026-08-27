@@ -278,3 +278,142 @@ describe("fetchDashboardData — empty and partial states (AC-D13, NFR-8)", () =
     expect(data.units.dayStrain).toBeNull();
   });
 });
+
+/**
+ * AUTO-GENERATED TEST STUB — JerkAI Contract
+ * PRD Target: JerkAI — Build PRD: Dashboard Multi-Source Metric Resolution & Tagging
+ *
+ * DO NOT EDIT test names, AC IDs, or stub assertions during implementation.
+ * Implementation code must be written to satisfy these stubs.
+ * Editing stubs to fit implementation triggers a blocking finding in jerkai-falsify-diff.
+ */
+
+// Seeds a withings-sourced row for one of the three scale metrics
+// (weight/body_fat_pct/lean_body_mass), mirroring bodyFat/whoopMetric above.
+// Withings' weight/lean_body_mass rows are stored in kg, unconverted (NFR-113)
+// — callers pass whatever unit is appropriate for the metric under test.
+const withingsMetric = (metric: string, readingDate: string, value: number, unit: string | null) =>
+  upsertReading({
+    userId: testUserId,
+    source: "withings",
+    metric,
+    readingDate,
+    value,
+    unit,
+    aggregation: "latest",
+    rawPayload: { seeded: true },
+  });
+
+const fitdaysWeight = (readingDate: string, value: number) =>
+  upsertReading({
+    userId: testUserId,
+    source: "fitdays",
+    metric: "weight",
+    readingDate,
+    value,
+    unit: "lb",
+    aggregation: "latest",
+    rawPayload: { date: `${readingDate} 07:30:00 -0500`, qty: value },
+  });
+
+const fitdaysLeanMass = (readingDate: string, value: number) =>
+  upsertReading({
+    userId: testUserId,
+    source: "fitdays",
+    metric: "lean_body_mass",
+    readingDate,
+    value,
+    unit: "lb",
+    aggregation: "latest",
+    rawPayload: { date: `${readingDate} 07:30:00 -0500`, qty: value },
+  });
+
+describe("fetchDashboardData — per-user scale-source resolution (AC-DR1..AC-DR6)", () => {
+  it("AC-DR1 (bare case): a user with zero rows in either candidate source resolves to a null source with no scale-metric data", async () => {
+    const data = await fetchDashboardData(7, testUserId);
+
+    expect(data.resolvedScaleSource).toBeNull();
+    expect(data.series.bodyFatPct).toEqual([]);
+    expect(data.series.weight).toEqual([]);
+    expect(data.series.leanBodyMass).toEqual([]);
+  });
+
+  it("AC-DR2: a user with rows only in fitdays for these three metrics resolves to fitdays, unchanged from today's behavior", async () => {
+    await bodyFat("2026-07-16", 18.2);
+    await fitdaysWeight("2026-07-16", 180.4);
+    await fitdaysLeanMass("2026-07-16", 152.1);
+
+    const data = await fetchDashboardData(1, testUserId);
+
+    expect(data.resolvedScaleSource).toBe("fitdays");
+    expect(data.series.bodyFatPct).toEqual([18.2]);
+    expect(data.series.weight).toEqual([180.4]);
+    expect(data.series.leanBodyMass).toEqual([152.1]);
+  });
+
+  it("AC-DR3: a user with rows only in withings for these three metrics resolves to withings and surfaces that real data", async () => {
+    await withingsMetric("body_fat_pct", "2026-07-16", 19.1, "%");
+    await withingsMetric("weight", "2026-07-16", 79.4, "kg");
+    await withingsMetric("lean_body_mass", "2026-07-16", 62.1, "kg");
+
+    const data = await fetchDashboardData(1, testUserId);
+
+    expect(data.resolvedScaleSource).toBe("withings");
+    expect(data.series.bodyFatPct).toEqual([19.1]);
+    expect(data.series.weight).toEqual([79.4]);
+    expect(data.series.leanBodyMass).toEqual([62.1]);
+  });
+
+  it("AC-DR4 (NFR-110): one resolvedScaleSource value backs all three metrics, even when only some of them have rows", async () => {
+    // Only two of the three metrics have any withings rows for this user —
+    // resolution still applies uniformly to the third (lean body mass),
+    // which must stay a gap because it has no rows in ANY source, never
+    // because a different source resolved for it.
+    await withingsMetric("weight", "2026-07-16", 79.4, "kg");
+    await withingsMetric("body_fat_pct", "2026-07-16", 19.1, "%");
+
+    const data = await fetchDashboardData(1, testUserId);
+
+    expect(data.resolvedScaleSource).toBe("withings");
+    expect(data.series.leanBodyMass).toEqual([null]);
+  });
+
+  it("AC-DR5/NFR-112: a user with rows in both sources resolves to whichever has the newer reading_date across the three metrics combined", async () => {
+    await bodyFat("2026-07-10", 18.5); // fitdays, older
+    await withingsMetric("body_fat_pct", "2026-07-16", 19.0, "%"); // withings, newer
+
+    const data = await fetchDashboardData(7, testUserId);
+
+    expect(data.resolvedScaleSource).toBe("withings");
+    // The non-resolved source's row is excluded entirely, never blended in.
+    expect(data.series.bodyFatPct).toEqual([null, null, null, null, null, null, 19.0]);
+  });
+
+  it("AC-DR5/NFR-112: a tie between both sources' most recent reading_date resolves to fitdays", async () => {
+    await bodyFat("2026-07-16", 18.5);
+    await withingsMetric("body_fat_pct", "2026-07-16", 19.0, "%");
+
+    const data = await fetchDashboardData(1, testUserId);
+
+    expect(data.resolvedScaleSource).toBe("fitdays");
+    expect(data.series.bodyFatPct).toEqual([18.5]);
+  });
+
+  it("AC-DR6/NFR-111 (axis protection): a non-resolved source's own reading is excluded from both the axis and the series, even where the resolved source has none for that metric", async () => {
+    // fitdays resolves: its combined max across the three scale metrics
+    // (2026-07-20, via body fat %) is newer than withings' combined max
+    // (2026-07-18, via weight) — but fitdays itself has zero weight rows.
+    await bodyFat("2026-07-20", 18.0);
+    await withingsMetric("weight", "2026-07-18", 79.0, "kg");
+
+    const data = await fetchDashboardData(5, testUserId);
+
+    expect(data.resolvedScaleSource).toBe("fitdays");
+    // The axis end date is driven only by the resolved source's own rows —
+    // never extended, altered, or otherwise touched by withings' 07-18 row.
+    expect(data.latestDay).toBe("2026-07-20");
+    // fitdays has no weight row of its own, so weight must read as an
+    // all-gap series — withings' value must never leak in to fill it.
+    expect(data.series.weight.some((v) => v !== null)).toBe(false);
+  });
+});

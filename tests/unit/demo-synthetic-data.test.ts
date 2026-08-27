@@ -67,3 +67,17 @@ describe("demo synthetic data (AC-PD3, NFR-52)", () => {
     expect(DEMO_DAILY_CALORIES).toHaveLength(DEMO_DASHBOARD_DATA.axis.length);
   });
 });
+
+/**
+ * AUTO-GENERATED TEST STUB — JerkAI Contract
+ * PRD Target: JerkAI — Build PRD: Dashboard Multi-Source Metric Resolution & Tagging
+ *
+ * DO NOT EDIT test names, AC IDs, or stub assertions during implementation.
+ * Implementation code must be written to satisfy these stubs.
+ * Editing stubs to fit implementation triggers a blocking finding in jerkai-falsify-diff.
+ */
+describe("demo synthetic data — scale-source resolution field (AC-DR9)", () => {
+  it('AC-DR9: DEMO_DASHBOARD_DATA.resolvedScaleSource is pinned to "fitdays", matching the demo\'s all-synthetic-Fitdays data', () => {
+    expect(DEMO_DASHBOARD_DATA.resolvedScaleSource).toBe("fitdays");
+  });
+});

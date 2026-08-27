@@ -269,6 +269,81 @@ describe("calories strip (AC-M6, AC-M8, AC-M11, DL-pending-3)", () => {
   });
 });
 
+/**
+ * AUTO-GENERATED TEST STUB — JerkAI Contract
+ * PRD Target: JerkAI — Build PRD: Dashboard Multi-Source Metric Resolution & Tagging
+ *
+ * DO NOT EDIT test names, AC IDs, or stub assertions during implementation.
+ * Implementation code must be written to satisfy these stubs.
+ * Editing stubs to fit implementation triggers a blocking finding in jerkai-falsify-diff.
+ */
+
+// The markup strictly between one strip's own data-chart marker and the next
+// strip's data-chart marker — this is where that NEXT strip's own label/tag
+// text renders (the label div precedes a strip's data-chart div in the same
+// Strip wrapper), mirroring the "label region" approach the existing AC-M6
+// calories test above already establishes.
+function labelRegion(markup: string, precedingChartId: string, chartId: string): string {
+  const start = markup.indexOf(`data-chart="${precedingChartId}"`);
+  expect(start, `chart '${precedingChartId}' should be in the markup`).toBeGreaterThan(-1);
+  const end = markup.indexOf(`data-chart="${chartId}"`);
+  expect(end, `chart '${chartId}' should be in the markup`).toBeGreaterThan(-1);
+  return markup.slice(start, end);
+}
+
+describe("untagged Whoop-detail strips gain tags (AC-DR7, AC-DR8)", () => {
+  const expandedMarkup = () => {
+    const data = fixture(40);
+    return renderToStaticMarkup(
+      <Dashboard data={data} calorieSeries={calorieFixture(data.axis)} initialWhoopOpen />,
+    );
+  };
+
+  it('AC-DR7: the HRV strip carries tag "Guardrail · Whoop", byte-identical to Recovery Score\'s existing tag', () => {
+    const region = labelRegion(expandedMarkup(), "leanMass", "hrv");
+    expect(region).toContain("Guardrail");
+    expect(region).toContain("Whoop");
+  });
+
+  it('AC-DR7: the RHR strip carries tag "Guardrail · Whoop", byte-identical to Recovery Score\'s existing tag', () => {
+    const region = labelRegion(expandedMarkup(), "hrv", "rhr");
+    expect(region).toContain("Guardrail");
+    expect(region).toContain("Whoop");
+  });
+
+  it('AC-DR8: the Sleep duration strip carries tag "Whoop" (bare source name, matching Weight\'s tracked-role convention), not a Guardrail-prefixed tag', () => {
+    const region = labelRegion(expandedMarkup(), "rhr", "sleep");
+    expect(region).toContain(">Whoop<");
+    expect(region).not.toContain("Guardrail");
+  });
+});
+
+describe("regression scope: untouched tags stay byte-unchanged (AC-DR9)", () => {
+  it('AC-DR9: the Day Strain tag stays "Driver · Whoop"', () => {
+    const markup = render(fixture(40));
+    const region = labelRegion(markup, "weight", "strain");
+    expect(region).toContain("Driver");
+    expect(region).toContain("Whoop");
+  });
+
+  it('AC-DR9: the Recovery Score tag stays "Guardrail · Whoop"', () => {
+    const data = fixture(40);
+    const markup = renderToStaticMarkup(
+      <Dashboard data={data} calorieSeries={calorieFixture(data.axis)} initialWhoopOpen />,
+    );
+    const region = labelRegion(markup, "sleep", "recovery");
+    expect(region).toContain("Guardrail");
+    expect(region).toContain("Whoop");
+  });
+
+  it('AC-DR9: the Calories strip tag stays "DRIVER · MANUAL"', () => {
+    const markup = render(fixture(40));
+    const region = labelRegion(markup, "strain", "calories");
+    expect(region).toContain("DRIVER");
+    expect(region).toContain("MANUAL");
+  });
+});
+
 describe("outlier absorption (AC-N14)", () => {
   it("AC-N14: a single-day weight outlier stays plotted as a raw dot while the trend lines absorb it", () => {
     // 30 days exactly, so the default 30-day window cut is the identity and

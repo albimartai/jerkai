@@ -43,3 +43,31 @@ describe("demo daily page (AC-PD2, AC-PD4)", () => {
     });
   });
 });
+
+/**
+ * AUTO-GENERATED TEST STUB — JerkAI Contract
+ * PRD Target: JerkAI — Build PRD: Dashboard Multi-Source Metric Resolution & Tagging
+ *
+ * DO NOT EDIT test names, AC IDs, or stub assertions during implementation.
+ * Implementation code must be written to satisfy these stubs.
+ * Editing stubs to fit implementation triggers a blocking finding in jerkai-falsify-diff.
+ */
+describe("demo daily page — Weight/Body fat/Lean body mass tags unchanged (AC-DR9)", () => {
+  it('AC-DR9: Weight keeps its static "Fitdays" tag and Lean body mass keeps its static "Guardrail · Fitdays" tag', () => {
+    return renderDemoDaily().then((markup) => {
+      const weightStart = markup.indexOf('data-chart="weight"');
+      const strainStart = markup.indexOf('data-chart="strain"');
+      expect(weightStart).toBeGreaterThan(-1);
+      expect(strainStart).toBeGreaterThan(weightStart);
+      expect(markup.slice(weightStart, strainStart)).toContain("Fitdays");
+
+      const leanMassStart = markup.indexOf('data-chart="leanMass"');
+      const hrvStart = markup.indexOf('data-chart="hrv"');
+      expect(leanMassStart).toBeGreaterThan(-1);
+      const leanMassRegion =
+        hrvStart === -1 ? markup.slice(leanMassStart) : markup.slice(leanMassStart, hrvStart);
+      expect(leanMassRegion).toContain("Guardrail");
+      expect(leanMassRegion).toContain("Fitdays");
+    });
+  });
+});
