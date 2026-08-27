@@ -2,11 +2,18 @@ import { getSql } from "@/lib/db";
 import { decryptToken, encryptToken } from "@/lib/withings-crypto";
 
 // Withings OAuth 2.0 (developer.withings.com). Same authorization-code shape
-// as Whoop's (lib/whoop-oauth.ts), with two confirmed structural differences
-// (NFR-104 — confirmed this session via search against Withings' own API
-// surface and third-party client implementations, since developer.withings.com
-// itself is JS-rendered and not fetchable directly; the build agent should
-// still spot-check against a live token exchange on first real connect):
+// as Whoop's (lib/whoop-oauth.ts), with two structural differences below.
+// NFR-104 — OPEN RISK, not yet live-verified: these come from search against
+// Withings' own API surface and third-party client implementations, since
+// developer.withings.com itself is JS-rendered and was not fetchable
+// directly this session. As of this commit, no live OAuth token exchange
+// has been performed against a real connected account — a Preview test of
+// this branch reached Withings' real consent screen (confirming
+// client_id/redirect_uri registration) but stopped before authorizing, so
+// exchangeCode()/refreshTokens() have never actually run against Withings'
+// live token endpoint. Flag as an open risk in the PR description until a
+// real first connect exercises this path and confirms (or corrects) the
+// shape below:
 //
 //   - The token endpoint is a single action-dispatched URL
 //     (https://wbsapi.withings.net/v2/oauth2, action=requesttoken), not a

@@ -1,7 +1,13 @@
 // Typed client for the Withings API's measure.getmeas operation
-// (developer.withings.com). Confirmed this session via search against
-// Withings' own API surface and third-party client implementations (the
-// docs site itself is JS-rendered and not fetchable directly — NFR-104):
+// (developer.withings.com).
+// NFR-104 — OPEN RISK, not yet live-verified: the shapes below come from
+// search against Withings' own API surface and third-party client
+// implementations (the docs site itself is JS-rendered and was not
+// fetchable directly this session). As of this commit, no live getmeas call
+// has been made — a Preview test of this branch stopped at Withings'
+// consent screen, before any code in this file ever ran against a real
+// access token. Flag as an open risk in the PR description until a real
+// first connect confirms (or corrects) the following:
 //   - getmeas paginates via `offset`/`more` in the response body, not
 //     Whoop's next_token style — a truthy `more` means re-request with the
 //     returned `offset`.

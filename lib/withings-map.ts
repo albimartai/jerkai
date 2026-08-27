@@ -4,18 +4,25 @@ import type { WithingsMeasureGroup } from "@/lib/withings-api";
 // (source = 'withings'). Pure functions — the sync route does the fetching
 // and writing.
 //
-// Confirmed this session via search against Withings' own API surface and
-// third-party client implementations (NFR-104; developer.withings.com itself
-// is JS-rendered and not independently fetchable):
+// NFR-104 — OPEN RISK, not yet live-verified: the shapes below come from
+// search against Withings' own API surface and third-party client
+// implementations (developer.withings.com itself is JS-rendered and was not
+// independently fetchable this session), NOT from a live OAuth exchange or
+// a live getmeas call against a real connected account. As of this commit,
+// no live token exchange or getmeas call has been performed — the Preview
+// test this branch went through stopped at Withings' consent screen,
+// before any code path here ever ran. Re-confirm all of the below (or file
+// it as an explicit open risk in the PR) on the first real connect:
 //   - Measure types: 1 = weight (kg), 5 = fat-free mass ("lean_body_mass",
 //     kg), 6 = fat ratio ("body_fat_pct", %). No other type is ever mapped
 //     (AC-WS16) — Withings has no native BMI type, and no other biomarker
 //     has a dashboard consumer today (§0).
 //   - A measuregrp's raw numeric value is scaled by `value * 10^unit`.
 //   - `timezone` is a SINGLE field on the response body, not per-measuregrp
-//     (unlike Whoop's per-record timezone_offset) — confirmed via a real
-//     example response ("timezone":"Europe/Dublin" alongside measuregrps) —
-//     so it is applied uniformly to every measuregrp passed in.
+//     (unlike Whoop's per-record timezone_offset) — per a third-party-
+//     documented example response ("timezone":"Europe/Dublin" alongside
+//     measuregrps), not our own live call — so it is applied uniformly to
+//     every measuregrp passed in.
 //
 // Units are stored exactly as Withings sends them (kg), never converted at
 // ingest (§0/NFR-102, AC-WS15) — lib/dashboard/units.ts#toPounds already
