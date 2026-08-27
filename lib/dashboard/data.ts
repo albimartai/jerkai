@@ -27,18 +27,68 @@ type Row = {
 
 const METRIC_KEYS = Object.keys(DASHBOARD_METRICS) as DashboardMetricKey[];
 
-const keyBySourceMetric = new Map<string, DashboardMetricKey>(
-  METRIC_KEYS.map((key) => {
-    const { source, metric } = DASHBOARD_METRICS[key];
-    return [`${source}/${metric}`, key];
-  }),
-);
+// bodyFatPct/weight/leanBodyMass resolve their active source per user
+// (weight/body_fat_pct/lean_body_mass in biometric_readings) — see
+// resolveScaleSource, below. Everything else keeps its one fixed source.
+//
+// Each user runs exactly one active smart-scale source at a time: the
+// candidate with the most recent reading_date across weight/body_fat_pct/
+// lean_body_mass combined wins; a tie resolves to 'fitdays' (NFR-112). null
+// means the user has zero rows in either candidate source for these three
+// metrics — never connected a scale.
+async function resolveScaleSource(
+  sql: ReturnType<typeof getSql>,
+  userId: number,
+): Promise<"fitdays" | "withings" | null> {
+  const rows = (await sql`
+    select source, to_char(max(reading_date), 'YYYY-MM-DD') as max_date
+    from biometric_readings
+    where user_id = ${userId}
+      and source in ('fitdays', 'withings')
+      and metric in ('weight', 'body_fat_pct', 'lean_body_mass')
+    group by source
+  `) as { source: string; max_date: string }[];
+
+  const maxDateBySource = new Map(rows.map((row) => [row.source, row.max_date]));
+  const fitdaysMax = maxDateBySource.get("fitdays") ?? null;
+  const withingsMax = maxDateBySource.get("withings") ?? null;
+  if (fitdaysMax === null && withingsMax === null) return null;
+  if (withingsMax === null) return "fitdays";
+  if (fitdaysMax === null) return "withings";
+  return withingsMax > fitdaysMax ? "withings" : "fitdays";
+}
 
 export async function fetchDashboardData(windowDays: number, userId: number): Promise<DashboardData> {
   const sql = getSql();
 
-  const sources = METRIC_KEYS.map((key) => DASHBOARD_METRICS[key].source);
-  const metrics = METRIC_KEYS.map((key) => DASHBOARD_METRICS[key].metric);
+  // Resolved first, in its own isolated query, before the main query's
+  // params are built — never widen the main CTE's own (source, metric)
+  // filter to accept both candidate sources for one key. Doing so would let
+  // a stale or leftover row in the non-active source leak into the axis-end
+  // computation and the series (the same cross-contamination NFR-68 already
+  // had to close once for cross-*user* rows, one level down: cross-*source*-
+  // within-one-user). Resolving first and then building the same single-
+  // concrete-(source, metric)-pair-per-key parameter list the query already
+  // expects closes this by construction — the query never sees the
+  // non-resolved source's rows at all (NFR-111).
+  const resolvedScaleSource = await resolveScaleSource(sql, userId);
+
+  const sources: string[] = [];
+  const metrics: string[] = [];
+  const keyBySourceMetric = new Map<string, DashboardMetricKey>();
+  for (const key of METRIC_KEYS) {
+    const entry = DASHBOARD_METRICS[key];
+    if ("sources" in entry) {
+      if (resolvedScaleSource === null) continue; // no data in either candidate source
+      sources.push(resolvedScaleSource);
+      metrics.push(entry.metric);
+      keyBySourceMetric.set(`${resolvedScaleSource}/${entry.metric}`, key);
+    } else {
+      sources.push(entry.source);
+      metrics.push(entry.metric);
+      keyBySourceMetric.set(`${entry.source}/${entry.metric}`, key);
+    }
+  }
 
   // The axis ends at the newest reading day across the dashboard metrics
   // (not the server clock, which runs in UTC and would disagree with the
@@ -76,7 +126,7 @@ export async function fetchDashboardData(windowDays: number, userId: number): Pr
   >;
 
   if (rows.length === 0) {
-    return { axis: [], series: emptySeries(), units, latestDay: null };
+    return { axis: [], series: emptySeries(), units, latestDay: null, resolvedScaleSource };
   }
 
   const valuesByDay = new Map<DashboardMetricKey, Map<string, number>>(
@@ -101,5 +151,5 @@ export async function fetchDashboardData(windowDays: number, userId: number): Pr
     series[key] = alignSeries(axis, valuesByDay.get(key)!);
   }
 
-  return { axis, series, units, latestDay };
+  return { axis, series, units, latestDay, resolvedScaleSource };
 }

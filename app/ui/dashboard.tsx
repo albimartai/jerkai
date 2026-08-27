@@ -435,6 +435,18 @@ export default function Dashboard({
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const [whoopOpen, setWhoopOpen] = useState(initialWhoopOpen);
 
+  // Body fat/Weight/Lean body mass tags follow data.resolvedScaleSource — one
+  // shared source, applied uniformly across all three (never independently
+  // per metric, NFR-110). null (never connected a scale) renders no tag,
+  // the same as today's disconnected-user behavior — no placeholder copy.
+  const scaleSourceLabel =
+    data.resolvedScaleSource === "withings"
+      ? "Withings"
+      : data.resolvedScaleSource === "fitdays"
+        ? "Fitdays"
+        : null;
+  const leanMassTag = scaleSourceLabel ? `Guardrail · ${scaleSourceLabel}` : undefined;
+
   // Everything derived is computed ONCE per data load (NFR-17), over the
   // FULL fetched history, then cut to the window — so the 7d/30d values at
   // the window's left edge still include the days before it (AC-D3, AC-N2),
@@ -608,6 +620,7 @@ export default function Dashboard({
             <MetricStrip
               id="bodyFat"
               label="Body fat"
+              tag={scaleSourceLabel ?? undefined}
               heightClass="h-44"
               raw={s.raw}
               avg7={s.avg7}
@@ -629,7 +642,7 @@ export default function Dashboard({
             <MetricStrip
               id="weight"
               label="Weight"
-              tag="Fitdays"
+              tag={scaleSourceLabel ?? undefined}
               heightClass="h-28"
               raw={s.weight}
               avg7={s.weight7}
@@ -680,7 +693,7 @@ export default function Dashboard({
             <MetricStrip
               id="leanMass"
               label="Lean body mass"
-              tag="Guardrail · Fitdays"
+              tag={leanMassTag}
               heightClass="h-24"
               raw={s.lbm}
               avg7={s.lbm7}
@@ -751,6 +764,7 @@ export default function Dashboard({
                 <MetricStrip
                   id="hrv"
                   label="HRV (rMSSD)"
+                  tag="Guardrail · Whoop"
                   heightClass="h-20"
                   raw={s.hrv}
                   avg7={s.hrv7}
@@ -767,6 +781,7 @@ export default function Dashboard({
                 <MetricStrip
                   id="rhr"
                   label="Resting heart rate"
+                  tag="Guardrail · Whoop"
                   heightClass="h-20"
                   raw={s.rhr}
                   avg7={s.rhr7}
@@ -783,6 +798,7 @@ export default function Dashboard({
                 <MetricStrip
                   id="sleep"
                   label="Sleep duration"
+                  tag="Whoop"
                   heightClass="h-20"
                   raw={s.sleep}
                   avg7={s.sleep7}

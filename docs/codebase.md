@@ -59,9 +59,9 @@ means a colocated `lib/**/*.test.ts`; tests living under `tests/` are named inst
 
 | Module | Purpose | Pure | Internal imports | Test |
 |---|---|---|---|---|
-| `types.ts` | `DASHBOARD_METRICS` (the 8 rendered source/metric pairs), `DashboardData`; **vendored downstream by `jerkai-mcp` under a byte-equality lock** (§6) | yes | `strain` | none |
+| `types.ts` | `DASHBOARD_METRICS` (the 8 rendered metric entries — 5 fixed `{source, metric}` pairs, plus `weight`/`bodyFatPct`/`leanBodyMass`'s `{sources, metric}` candidate-list shape, resolved per user), `DashboardData` (now carries `resolvedScaleSource`); **vendored downstream by `jerkai-mcp` under a byte-equality lock** (§6) | yes | `strain` | none |
 | `config.ts` | `DASHBOARD_CONFIG` — every tuning constant, typed | yes | `meal-type` | none |
-| `data.ts` | `fetchDashboardData(windowDays)` — the one dashboard read query | no | `db`, `date-key`, `series`, `types` | `tests/integration/dashboard-read.test.ts` |
+| `data.ts` | `fetchDashboardData(windowDays, userId)` — the one dashboard read query, plus its own prior `resolveScaleSource(sql, userId)` step | no | `db`, `date-key`, `series`, `types` | `tests/integration/dashboard-read.test.ts` |
 | `date-key.ts` | `readingDateKey` — read-side date guard; **throws** on a non-local-day format | yes | — | yes |
 | `series.ts` | `addDays`, `dayAxis`, `alignSeries` — shared axis and null-gap alignment | yes | — | yes |
 | `rolling.ts` | `rollingAverage(values, window)` — trailing mean over present days only | yes | — | yes |
@@ -111,15 +111,24 @@ trailing 7 days *(value-pinned: `DEFAULT_WINDOW_DAYS`)*. It takes **no source pa
 the route owns the `whoop` lane exclusively. No token row returns
 `{status: "not_connected"}` with no `sync_runs` row and no alert.
 
-**Dashboard read.** `fetchDashboardData(windowDays)` takes **only `windowDays`** — no date,
-no source, no metric filter; the metric set is fixed by `DASHBOARD_METRICS`. One query
-returns `{axis, series, units, latestDay}`: `axis` is `windowDays` consecutive device-local
-day keys ending at the **newest reading day in the data, not the server clock**; `series` is
-one `(number|null)[]` per metric key aligned to that axis; `units` is the newest row's unit
-per metric. With no rows it returns an empty axis and `latestDay: null`.
+**Dashboard read.** `fetchDashboardData(windowDays, userId)` takes `windowDays` and `userId` —
+no date, no source, no metric filter; the metric set is fixed by `DASHBOARD_METRICS`. Before
+the one dashboard query runs, a separate, isolated `resolveScaleSource(sql, userId)` call
+determines which smart-scale source (`'fitdays'` or `'withings'`) this user's
+`weight`/`bodyFatPct`/`leanBodyMass` resolve to — whichever candidate has the most recent
+`reading_date` across those three metrics combined, ties favoring `'fitdays'`; `null` when the
+user has rows in neither. That resolved source (never both) is what the main query's
+`(source, metric)` parameter list uses for those three keys, so the query itself never sees
+the non-resolved source's rows. The main query returns
+`{axis, series, units, latestDay, resolvedScaleSource}`: `axis` is `windowDays` consecutive
+device-local day keys ending at the **newest reading day in the data, not the server clock**;
+`series` is one `(number|null)[]` per metric key aligned to that axis; `units` is the newest
+row's unit per metric. With no rows it returns an empty axis and `latestDay: null` (with
+whatever `resolvedScaleSource` the resolution step found — the two are computed independently
+and either can be null/empty regardless of the other).
 
-**Render.** `/` and `/weekly` → `fetchDashboardData(90)` → `buildWeeklyView` → `WeeklyLedger`.
-`/daily` → `fetchDashboardData(90)` plus the sibling `fetchTargets()` +
+**Render.** `/` and `/weekly` → `fetchDashboardData(90, userId)` → `buildWeeklyView` → `WeeklyLedger`.
+`/daily` → `fetchDashboardData(90, userId)` plus the sibling `fetchTargets()` +
 `fetchCalorieSeries(axis, targets)` → `Dashboard`. The 30/90 toggle and the hover crosshair
 re-render client-side from data already held — no second fetch. All six gated pages (`/`,
 `/daily`, `/weekly`, `/log-meal`, `/settings/targets`, `/status`) are
