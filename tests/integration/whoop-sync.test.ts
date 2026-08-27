@@ -175,6 +175,7 @@ beforeAll(async () => {
   await sql`delete from whoop_workouts`;
   await sql`delete from sync_runs`;
   await sql`delete from whoop_tokens`;
+  await sql`delete from withings_tokens`;
   await sql`delete from users`;
   const [user] = await sql`insert into users (email) values (${FIXTURE_USER_EMAIL}) returning id`;
   testUserId = user.id;
