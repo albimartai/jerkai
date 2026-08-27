@@ -1,25 +1,32 @@
 // Typed client for the Withings API's measure.getmeas operation
 // (developer.withings.com).
-// NFR-104 — OPEN RISK, not yet live-verified: the shapes below come from
-// search against Withings' own API surface and third-party client
-// implementations (the docs site itself is JS-rendered and was not
-// fetchable directly this session). As of this commit, no live getmeas call
-// has been made — a Preview test of this branch stopped at Withings'
-// consent screen, before any code in this file ever ran against a real
-// access token. Flag as an open risk in the PR description until a real
-// first connect confirms (or corrects) the following:
+// NFR-104 — live-verified 2026-08-27 against two real getmeas calls (a demo
+// account and a real connected account, both via a standalone diagnostic
+// script, not committed to this branch): confirmed live —
+//   - The token-exchange envelope ({status, body}) and getmeas envelope
+//     shape match what's implemented here exactly.
+//   - Measure-type ids 1/5/6 (weight/fat-free-mass/fat-ratio) and the
+//     `value * 10^unit` scaling convention are confirmed against a real
+//     response containing all three types in one measuregrp.
+//   - `timezone` is present both at the response-body level AND per-group
+//     (WithingsMeasureGroup#timezone) — see lib/withings-map.ts, which was
+//     built against the wrong assumption (single shared timezone only) and
+//     has been corrected to prefer the per-group field.
+//   - No rate-limit-related response headers (X-RateLimit-*, Retry-After,
+//     etc.) appeared on either successful call — consistent with this
+//     client's existing design of only reading a reset header on an actual
+//     429 and otherwise falling back to a fixed delay, but the 429 case
+//     itself remains unconfirmed (neither live call tripped the rate cap):
 //   - getmeas paginates via `offset`/`more` in the response body, not
 //     Whoop's next_token style — a truthy `more` means re-request with the
-//     returned `offset`.
+//     returned `offset`. Confirmed only for the empty/no-pagination case
+//     (both fields absent when there's nothing to paginate, which this
+//     client's loop-exit condition already handles); real multi-page
+//     pagination was not exercised (neither live account had enough
+//     history).
 //   - The documented rate cap is 120 requests/minute; this client stays at
 //     half that (NFR-101) via a fixed pacing window rather than firing every
-//     request immediately.
-//   - No specific 429 response-header name for Withings' rate-limit reset
-//     was independently confirmed — apiGet retries once on 429 honoring a
-//     Retry-After-style header when present, falling back to a fixed delay
-//     otherwise, mirroring lib/whoop-api.ts#apiGet's bounded-retry shape.
-//     Reconcile the exact header name against a live 429 response on first
-//     real backfill run.
+//     request immediately — unconfirmed against a live 429, per above.
 //
 // Every measuregrp is also stored verbatim in raw_payload by the mapping
 // layer, so fields not modeled here are preserved regardless.
@@ -46,6 +53,13 @@ export type WithingsMeasureGroup = {
   grpid: number;
   date: number; // Unix epoch seconds
   measures: WithingsMeasure[];
+  // Per-group IANA timezone — confirmed present in a live getmeas response
+  // (2026-08-27, a real connected account), alongside the response-body-level
+  // `timezone` field. Both matched in that sample, but the two are not
+  // guaranteed to agree in general (a reading synced from a different
+  // timezone than the account's registered one) — lib/withings-map.ts
+  // prefers this per-group field over the shared body-level one when present.
+  timezone?: string;
   [key: string]: unknown;
 };
 

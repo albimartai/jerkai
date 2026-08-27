@@ -126,3 +126,37 @@ describe("mapWithingsData — undatable group is skipped, never guessed (NFR-107
     expect(skipped.length).toBeGreaterThan(0);
   });
 });
+
+// Added after this branch's own live NFR-104 verification (2026-08-27): a
+// real getmeas response carried a per-group `timezone` field in addition to
+// the response-body-level one, contradicting OQ-5's original single-shared-
+// timezone assumption. Not part of the original auto-generated stub set —
+// new coverage for behavior discovered only once live data was available.
+describe("mapWithingsData — per-group timezone takes precedence over the shared body-level fallback (NFR-107, live-corrected)", () => {
+  it("dates a group by its own timezone field when the two disagree with the shared body-level timezone", () => {
+    // Tokyo is UTC+9 — GROUP_DATE (2026-07-10T03:55:00Z) is 12:55 on
+    // 2026-07-10 in Tokyo, a different calendar day than Chicago's
+    // 2026-07-09 (used by every other fixture in this file).
+    const groupWithOwnTimezone: WithingsMeasureGroup = { ...MEASURE_GROUP, timezone: "Asia/Tokyo" };
+    const { readings } = mapWithingsData({ measureGroups: [groupWithOwnTimezone], timezone: CHICAGO_TZ });
+    expect(readings.length).toBeGreaterThan(0);
+    expect(readings.every((r) => r.readingDate === "2026-07-10")).toBe(true);
+  });
+
+  it("falls back to the shared body-level timezone when a group has no timezone of its own", () => {
+    const { readings } = mapWithingsData({ measureGroups: [MEASURE_GROUP], timezone: CHICAGO_TZ });
+    expect(readings.length).toBeGreaterThan(0);
+    expect(readings.every((r) => r.readingDate === "2026-07-09")).toBe(true);
+  });
+
+  it("falls back to the shared body-level timezone when a group's own timezone field is malformed", () => {
+    const groupWithBadTimezone: WithingsMeasureGroup = { ...MEASURE_GROUP, timezone: "not-a-real-zone" };
+    const { readings, skipped } = mapWithingsData({
+      measureGroups: [groupWithBadTimezone],
+      timezone: CHICAGO_TZ,
+    });
+    expect(readings.length).toBeGreaterThan(0);
+    expect(readings.every((r) => r.readingDate === "2026-07-09")).toBe(true);
+    expect(skipped).toEqual([]);
+  });
+});

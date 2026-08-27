@@ -3,29 +3,31 @@ import { decryptToken, encryptToken } from "@/lib/withings-crypto";
 
 // Withings OAuth 2.0 (developer.withings.com). Same authorization-code shape
 // as Whoop's (lib/whoop-oauth.ts), with two structural differences below.
-// NFR-104 — OPEN RISK, not yet live-verified: these come from search against
-// Withings' own API surface and third-party client implementations, since
-// developer.withings.com itself is JS-rendered and was not fetchable
-// directly this session. As of this commit, no live OAuth token exchange
-// has been performed against a real connected account — a Preview test of
-// this branch reached Withings' real consent screen (confirming
-// client_id/redirect_uri registration) but stopped before authorizing, so
-// exchangeCode()/refreshTokens() have never actually run against Withings'
-// live token endpoint. Flag as an open risk in the PR description until a
-// real first connect exercises this path and confirms (or corrects) the
-// shape below:
+// NFR-104 — live-verified 2026-08-27 against two real token exchanges (a
+// Withings demo account and a real connected account, both via a
+// standalone diagnostic script, not committed to this branch):
 //
 //   - The token endpoint is a single action-dispatched URL
 //     (https://wbsapi.withings.net/v2/oauth2, action=requesttoken), not a
 //     dedicated /token path, and its response is wrapped in a
 //     {status, body} envelope — status 0 means success, and the actual
-//     token fields live under body, not at the top level.
+//     token fields live under body, not at the top level. Confirmed exactly
+//     as implemented: both live responses returned
+//     {status:0, body:{access_token, refresh_token, expires_in, scope,
+//     userid, token_type}}.
+//   - `userid` is inconsistently typed across responses in practice (a bare
+//     JSON number from the demo account, a quoted string from the real
+//     account) — harmless today since nothing in this codebase reads
+//     WithingsTokenResponse#userid, but worth knowing if a future slice
+//     starts consuming it.
 //   - Refresh tokens ROTATE on every refresh, exactly like Whoop's — the
 //     rotated pair must be persisted immediately or the integration strands
 //     until Albert re-consents via /api/withings/connect. Access tokens are
 //     short-lived, so the same PROACTIVE-ON-USE refresh strategy applies:
 //     getFreshAccessToken() refreshes whenever the stored token is within
-//     60s of expiry.
+//     60s of expiry. (Refresh itself was not live-exercised this session —
+//     both diagnostic runs only performed the initial authorization_code
+//     exchange, not a subsequent refresh_token grant.)
 //
 // user.metrics is the scope that grants body-composition read access
 // (weight/fat-free-mass/fat-ratio, §0) — this integration requests nothing
