@@ -271,25 +271,31 @@ not in either checkout, so its ids are read from source, tests and commit subjec
 | `AC-M` | jerkai | 35 | Log Meal and its fast-follows |
 | `AC-PD` | jerkai | 7 | Public Demo |
 | `AC-AB` | jerkai | 9 | Demo About |
+| `AC-AU` | jerkai | 7 | Extend Sign-In Allowlist (`docs/prd/extend-signin-allowlist.md`) |
+| `AC-MU` | jerkai | 12 | Multi-User Data Model Retrofit (`docs/prd/multi-user-data-model-retrofit.md`) |
 | `AC-WT` | jerkai | 13 | Whoop Multi-Tenancy |
 | `AC-PUE` | jerkai | 4 | Primary User Email Alert Gap (`AC-PUE4` is an ops/manual check, not code-tested) |
 | `AC-PM` | jerkai | 4 | Preview Migration Gap Fix (`docs/prd/preview-migration-gap-fix.md`; all four ACs are ops/manual checks, not code-tested) |
 | `AC-ST` | jerkai | 4 | Status Sync Times — Local Timezone (`docs/prd/status-sync-local-timezone.md`, PR #31, shipped 2026-08-24) |
 | `AC-FT` | jerkai | 4 | Footer Privacy Policy Link (`docs/prd/footer-privacy-link.md`; `AC-FT3`/`AC-FT4` are regression checks satisfied by existing/full-suite test runs, not new assertions). The NFR-92 no-duplication test checks `href="/privacy"`/`<footer` rather than the PRD §6 text's literal `"Privacy Policy"` substring — a bare substring check would false-positive against `app/privacy/page.tsx`'s own `<h1>Privacy Policy</h1>`, so the as-built check is the correct one. |
+| `AC-WS` | jerkai | 20 | Withings Smart-Scale Integration (`docs/prd/withings-smart-scale-integration.md`, PR #33) |
+| `AC-DR` | jerkai | 9 | Dashboard Multi-Source Metric Resolution & Tagging (`docs/prd/dashboard-multi-source-metric-resolution-and-tagging.md`, PR #34) |
+| `AC-ES` | jerkai | 6 | Resend Sending Domain Switch (`docs/prd/resend-sending-domain-switch.md`, this slice) |
 | `AC-MF` | jerkai-mcp | 9 | MCP metric registry, slice 1 (`AC-MF9`, the vendor drift check) |
 
 **NFR** is one ascending series **per repo**, not per-slice and not global across repos
-(DL-2026-07-31-a). In **jerkai** it is numeric, high-water mark **NFR-97**
-(`docs/prd/preview-migration-gap-fix.md`, NFR-94–97; before it, NFR-85 from
-`docs/prd/nav-header-cleanup-status-chrome.md`, NFR-83–85, and NFR-82 from
-`docs/prd/whoop-multi-tenancy.md` before that). **NFR-86–87 shipped** via Weekly Ledger Week
-Column Wrap (`docs/prd/weekly-ledger-week-column-wrap.md`) — the high-water mark stays
-NFR-97 since this slice claimed no new ids beyond its own prior reservation. **NFR-88–91
-shipped** via Status Sync Times — Local Timezone (`docs/prd/status-sync-local-timezone.md`,
-PR #31, merged 2026-08-24) — this repo copy's own reservation note was not refreshed at ship
-time; corrected here rather than left stale. **NFR-92–93 shipped** via Footer Privacy
-Policy Link (`docs/prd/footer-privacy-link.md`, this slice) — the footer is rendered from
-exactly one place (NFR-92) and adds no new I/O to `app/layout.tsx` (NFR-93). In
+(DL-2026-07-31-a). In **jerkai** it is numeric, high-water mark **NFR-115** as of this slice
+(NFR-116–119, this slice, `docs/prd/resend-sending-domain-switch.md`; before it, NFR-115
+from `docs/prd/dashboard-multi-source-metric-resolution-and-tagging.md`, PR #34 — this
+table's prior high-water mark of NFR-97 was stale, understating it: it omitted the
+reservations made by Extend Sign-In Allowlist, Multi-User Data Model Retrofit, Withings
+Smart-Scale Integration, and Dashboard Multi-Source Metric Resolution & Tagging, the same
+staleness this edit also corrects for `AC-AU`/`AC-MU`/`AC-WS`/`AC-DR` above). **NFR-86–87
+shipped** via Weekly Ledger Week Column Wrap (`docs/prd/weekly-ledger-week-column-wrap.md`).
+**NFR-88–91 shipped** via Status Sync Times — Local Timezone
+(`docs/prd/status-sync-local-timezone.md`, PR #31, merged 2026-08-24). **NFR-92–93 shipped**
+via Footer Privacy Policy Link (`docs/prd/footer-privacy-link.md`) — the footer is rendered
+from exactly one place (NFR-92) and adds no new I/O to `app/layout.tsx` (NFR-93). In
 **jerkai-mcp** it is a separate lettered series, **NFR-A..NFR-D**, which does not continue
 jerkai's numbering and never will.
 

@@ -1,6 +1,6 @@
 # JerkAI
 
-A personal, single-user health dashboard. It lands biometric data from disconnected sources (Fitdays smart scale, Whoop, via Apple Health) into one Postgres store and turns a noisy daily body fat reading into a trustworthy trend.
+A personal health dashboard for Albert and the friends he invites. It lands biometric data from disconnected sources (Fitdays smart scale, Whoop, via Apple Health) into one Postgres store and turns a noisy daily body fat reading into a trustworthy trend.
 
 This repo is also a portfolio artifact: it is built in public, with the same secret hygiene and code quality expected of production work. No real biometric data is ever exposed publicly.
 
