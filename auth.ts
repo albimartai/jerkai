@@ -23,10 +23,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth(() => {
     providers: [
       Resend({
         // API key comes from AUTH_RESEND_KEY via Auth.js env inference.
-        // onboarding@resend.dev delivers only to the Resend account owner —
-        // the same constraint lib/alerts.ts already accepts, and fine here
-        // because the allowlist restricts sign-in to that one address anyway.
-        from: "JerkAI <onboarding@resend.dev>",
+        // Verified jerkai.app sending domain (docs/prd/resend-sending-domain-switch.md) —
+        // delivers to any allowlisted recipient, not just the Resend account owner.
+        from: "JerkAI <noreply@jerkai.app>",
       }),
     ],
     // JWT sessions so proxy.ts can verify a session without a database
