@@ -284,7 +284,7 @@ not in either checkout, so its ids are read from source, tests and commit subjec
 | `AC-MF` | jerkai-mcp | 9 | MCP metric registry, slice 1 (`AC-MF9`, the vendor drift check) |
 
 **NFR** is one ascending series **per repo**, not per-slice and not global across repos
-(DL-2026-07-31-a). In **jerkai** it is numeric, high-water mark **NFR-115** as of this slice
+(DL-2026-07-31-a). In **jerkai** it is numeric, high-water mark **NFR-119** as of this slice
 (NFR-116–119, this slice, `docs/prd/resend-sending-domain-switch.md`; before it, NFR-115
 from `docs/prd/dashboard-multi-source-metric-resolution-and-tagging.md`, PR #34 — this
 table's prior high-water mark of NFR-97 was stale, understating it: it omitted the
