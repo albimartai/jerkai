@@ -34,7 +34,10 @@ describe("nav header variants (AC-AB2, NFR-61)", () => {
 
   it("NFR-61: the live variant's existing links are unchanged by this slice", () => {
     const markup = renderToStaticMarkup(<NavHeader active="weekly" />);
-    for (const href of ["/weekly", "/daily", "/settings/targets", "/log-meal", "/status"]) {
+    // "/status" -> "/data" (Data Page Redesign & Connect, PRD §1): this is an
+    // ordinary, non-stub test (carries no DO-NOT-EDIT header), so its href
+    // list gets an ordinary update, not a PRD-authorized stub exception.
+    for (const href of ["/weekly", "/daily", "/settings/targets", "/log-meal", "/data"]) {
       expect(markup).toContain(`href="${href}"`);
     }
     expect(markup).toContain('aria-current="page"');
@@ -68,5 +71,85 @@ describe("nav header CTA text and outline (AC-D19, AC-D20)", () => {
     expect(markup).toContain(
       "rounded-md px-3 py-1 text-sm text-zinc-600 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-900",
     );
+  });
+});
+
+/**
+ * AUTO-GENERATED TEST STUB — JerkAI Contract
+ * PRD Target: JerkAI — Build PRD: Data Page Redesign & Connect
+ *
+ * DO NOT EDIT test names, AC IDs, or stub assertions during implementation.
+ * Implementation code must be written to satisfy these stubs.
+ * Editing stubs to fit implementation triggers a blocking finding in jerkai-falsify-diff.
+ */
+describe("nav header active highlight — Data, Log Meal, Targets (AC-DS18, AC-DS19, AC-DS20, AC-DS21)", () => {
+  // NavHeader's `active` prop is typed "weekly" | "daily" today; PRD §0.8
+  // widens it to this exact union — casting to it here (rather than
+  // `@ts-expect-error`) stays valid both before and after that widening ships,
+  // so this stub never needs a build-time edit to its own type-check status.
+  type ProspectiveActive = "weekly" | "daily" | "data" | "logmeal" | "targets";
+  const ACTIVE_CLASSES = "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900";
+
+  function linkMarkup(markup: string, href: string): string | null {
+    const escaped = href.replace(/\//g, "\\/");
+    return markup.match(new RegExp(`<a[^>]*href="${escaped}"[^>]*>`))?.[0] ?? null;
+  }
+
+  it('AC-DS18: active="data" highlights the Data link (bg-zinc-900 text-white / dark:bg-zinc-100 dark:text-zinc-900) and no other link', () => {
+    const markup = renderToStaticMarkup(
+      <NavHeader active={"data" as ProspectiveActive} />,
+    );
+    expect(markup).toContain(">Data<");
+    const dataLink = linkMarkup(markup, "/data");
+    expect(dataLink).not.toBeNull();
+    expect(dataLink).toContain(ACTIVE_CLASSES);
+    for (const href of ["/weekly", "/daily", "/settings/targets", "/log-meal"]) {
+      const link = linkMarkup(markup, href);
+      expect(link).not.toBeNull();
+      expect(link).not.toContain(ACTIVE_CLASSES);
+    }
+  });
+
+  it('AC-DS19: active="logmeal" highlights the Log Meal link and no other link', () => {
+    const markup = renderToStaticMarkup(
+      <NavHeader active={"logmeal" as ProspectiveActive} />,
+    );
+    const logMealLink = linkMarkup(markup, "/log-meal");
+    expect(logMealLink).not.toBeNull();
+    expect(logMealLink).toContain(ACTIVE_CLASSES);
+    for (const href of ["/weekly", "/daily", "/settings/targets", "/data"]) {
+      const link = linkMarkup(markup, href);
+      expect(link).not.toBeNull();
+      expect(link).not.toContain(ACTIVE_CLASSES);
+    }
+  });
+
+  it('AC-DS20 (regression, cross-page isolation): active="weekly" or active="daily" leaves Data, Log Meal, and Targets in their non-active treatment, and Weekly/Daily\'s own existing active behavior is unchanged', () => {
+    for (const active of ["weekly", "daily"] as const) {
+      const markup = renderToStaticMarkup(<NavHeader active={active} />);
+      for (const href of ["/data", "/log-meal", "/settings/targets"]) {
+        const link = linkMarkup(markup, href);
+        expect(link).not.toBeNull();
+        expect(link).not.toContain(ACTIVE_CLASSES);
+      }
+      const activeHref = active === "weekly" ? "/weekly" : "/daily";
+      const activeLink = linkMarkup(markup, activeHref);
+      expect(activeLink).not.toBeNull();
+      expect(activeLink).toContain(ACTIVE_CLASSES);
+    }
+  });
+
+  it('AC-DS21: active="targets" highlights the Targets link and no other link', () => {
+    const markup = renderToStaticMarkup(
+      <NavHeader active={"targets" as ProspectiveActive} />,
+    );
+    const targetsLink = linkMarkup(markup, "/settings/targets");
+    expect(targetsLink).not.toBeNull();
+    expect(targetsLink).toContain(ACTIVE_CLASSES);
+    for (const href of ["/weekly", "/daily", "/data", "/log-meal"]) {
+      const link = linkMarkup(markup, href);
+      expect(link).not.toBeNull();
+      expect(link).not.toContain(ACTIVE_CLASSES);
+    }
   });
 });

@@ -2,18 +2,21 @@ import { neon } from "@neondatabase/serverless";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-// /status (app/status/page.tsx) is a Server Component that queries sync_runs
-// directly and calls auth() for the signed-in session — no existing test file
-// covers it (confirmed this session, PRD §6). auth() is mocked so the page's
-// own logic runs against a real disposable Neon branch without the full
+// /data (app/data/page.tsx, relocated from app/status/page.tsx this slice,
+// PRD §0.3/§1) is a Server Component that queries sync_runs directly and
+// calls auth() for the signed-in session. auth() is mocked so the page's own
+// logic runs against a real disposable Neon branch without the full
 // Auth.js/session-cookie machinery; the page's async function is called and
 // awaited directly (no Route Handler/JSX-tree renderer needed), then rendered
 // with react-dom/server, the same pattern tests/unit/*-render.test.tsx already
 // use for server-rendered pages.
+//
+// Prospective import (PRD §1): app/data/page.tsx does not exist yet — this
+// resolves once the build agent performs the git mv from app/status/page.tsx.
 const authMock = vi.hoisted(() => vi.fn());
 vi.mock("@/auth", () => ({ auth: authMock }));
 
-import Status from "@/app/status/page";
+import Data from "@/app/data/page";
 import { LocalTime } from "@/app/ui/local-time";
 
 const DATABASE_URL = process.env.DATABASE_URL ?? "";
@@ -22,13 +25,13 @@ const sql = neon(DATABASE_URL || "postgresql://unset:unset@unset/unset"); //gitl
 
 async function renderStatusFor(userId: number): Promise<string> {
   authMock.mockResolvedValue({ user: { id: String(userId) } });
-  const element = await Status();
+  const element = await Data();
   return renderToStaticMarkup(element);
 }
 
 async function renderStatusElementFor(userId: number) {
   authMock.mockResolvedValue({ user: { id: String(userId) } });
-  return Status();
+  return Data();
 }
 
 // renderToStaticMarkup never fires React effects, so LocalTime — a client
@@ -82,6 +85,7 @@ beforeEach(async () => {
 
 afterEach(() => {
   authMock.mockReset();
+  vi.unstubAllEnvs();
 });
 
 /**
@@ -154,7 +158,10 @@ describe("/status — AC-D18: shared header chrome", () => {
 
     // Content AND order (AC-D18's own language) — a scramble must fail this,
     // not just an absence, so each href's index must strictly increase.
-    const hrefs = ["/weekly", "/daily", "/settings/targets", "/log-meal", "/status"];
+    // PRD-authorized exception to this block's own DO-NOT-EDIT header
+    // (Data Page Redesign & Connect, §0.3): last entry "/status" -> "/data",
+    // the identical convention this file already used twice for AC-WT8/AC-ST1.
+    const hrefs = ["/weekly", "/daily", "/settings/targets", "/log-meal", "/data"];
     const indices = hrefs.map((href) => html.indexOf(`href="${href}"`));
     for (const index of indices) {
       expect(index).toBeGreaterThan(-1);
@@ -275,5 +282,204 @@ describe("/status — AC-WS13: a connected user's own Withings sync history", ()
 
     const htmlForA = await renderStatusFor(userA.id);
     expect(htmlForA).not.toMatch(/failure/i);
+  });
+});
+
+/**
+ * AUTO-GENERATED TEST STUB — JerkAI Contract
+ * PRD Target: JerkAI — Build PRD: Data Page Redesign & Connect
+ *
+ * DO NOT EDIT test names, AC IDs, or stub assertions during implementation.
+ * Implementation code must be written to satisfy these stubs.
+ * Editing stubs to fit implementation triggers a blocking finding in jerkai-falsify-diff.
+ */
+describe("/data — AC-DS1/AC-DS4/AC-DS5: categorized card layout", () => {
+  it("AC-DS1 (bare case): a non-primary user with no tokens and zero sync_runs sees both category headings, three 'Not connected' tags, and 'never' x3", async () => {
+    const [user] = await sql`insert into users (email) values ('data-bare-case@example.com') returning id`;
+    vi.stubEnv("PRIMARY_USER_EMAIL", "data-bare-case-someone-else@example.com");
+
+    const html = await renderStatusFor(user.id);
+
+    expect(html).toContain(">Data<");
+    expect(html).toContain("Scale");
+    expect(html).toContain("Performance");
+    expect((html.match(/Not connected/g) ?? []).length).toBe(3);
+    expect((html.match(/never/g) ?? []).length).toBe(3);
+  });
+
+  it("AC-DS4: renders exactly two category headings, 'Scale' before 'Performance', with Fitdays then Withings inside Scale and Whoop inside Performance", async () => {
+    const [user] = await sql`insert into users (email) values ('data-categories@example.com') returning id`;
+    vi.stubEnv("PRIMARY_USER_EMAIL", "data-categories-someone-else@example.com");
+
+    const html = await renderStatusFor(user.id);
+
+    expect((html.match(/Scale/g) ?? []).length).toBe(1);
+    expect((html.match(/Performance/g) ?? []).length).toBe(1);
+
+    const order = ["Scale", "Fitdays", "Withings", "Performance", "Whoop"].map((needle) =>
+      html.indexOf(needle),
+    );
+    for (const index of order) {
+      expect(index).toBeGreaterThan(-1);
+    }
+    for (let i = 1; i < order.length; i++) {
+      expect(order[i]).toBeGreaterThan(order[i - 1]);
+    }
+  });
+
+  it("AC-DS5: each source card shows its method label — 'Apple Health' for Fitdays, 'OAuth' for Whoop and for Withings", async () => {
+    const [user] = await sql`insert into users (email) values ('data-method-label@example.com') returning id`;
+    vi.stubEnv("PRIMARY_USER_EMAIL", "data-method-label-someone-else@example.com");
+
+    const html = await renderStatusFor(user.id);
+
+    expect(html).toContain("Apple Health");
+    expect((html.match(/OAuth/g) ?? []).length).toBe(2);
+  });
+});
+
+/**
+ * AUTO-GENERATED TEST STUB — JerkAI Contract
+ * PRD Target: JerkAI — Build PRD: Data Page Redesign & Connect
+ *
+ * DO NOT EDIT test names, AC IDs, or stub assertions during implementation.
+ * Implementation code must be written to satisfy these stubs.
+ * Editing stubs to fit implementation triggers a blocking finding in jerkai-falsify-diff.
+ */
+describe("/data — AC-DS3: nav link renamed Status -> Data", () => {
+  it("AC-DS3: the resolution-adjacent link that used to read 'Status' now reads exactly 'Data' with href=/data, not 'Status'/'/status'", async () => {
+    const [user] = await sql`insert into users (email) values ('data-nav-rename@example.com') returning id`;
+    vi.stubEnv("PRIMARY_USER_EMAIL", "data-nav-rename-someone-else@example.com");
+
+    const html = await renderStatusFor(user.id);
+
+    expect(html).toContain('href="/data"');
+    expect(html).toContain(">Data<");
+    expect(html).not.toContain('href="/status"');
+    expect(html).not.toContain(">Status<");
+  });
+});
+
+/**
+ * AUTO-GENERATED TEST STUB — JerkAI Contract
+ * PRD Target: JerkAI — Build PRD: Data Page Redesign & Connect
+ *
+ * DO NOT EDIT test names, AC IDs, or stub assertions during implementation.
+ * Implementation code must be written to satisfy these stubs.
+ * Editing stubs to fit implementation triggers a blocking finding in jerkai-falsify-diff.
+ */
+describe("/data — AC-DS6/AC-DS7/AC-DS8/AC-DS9: Whoop/Withings connected-state and Connect actions", () => {
+  it("AC-DS6 (bare/not-connected): a user with no whoop_tokens row sees a Connect anchor with href=/api/whoop/connect", async () => {
+    const [user] = await sql`insert into users (email) values ('data-whoop-bare@example.com') returning id`;
+    vi.stubEnv("PRIMARY_USER_EMAIL", "data-whoop-bare-someone-else@example.com");
+
+    const html = await renderStatusFor(user.id);
+
+    expect(html).toMatch(/<a[^>]*href="\/api\/whoop\/connect"/);
+  });
+
+  it("AC-DS6 (bare/not-connected, Withings): a user with no withings_tokens row sees a Connect anchor with href=/api/withings/connect", async () => {
+    const [user] = await sql`insert into users (email) values ('data-withings-bare@example.com') returning id`;
+    vi.stubEnv("PRIMARY_USER_EMAIL", "data-withings-bare-someone-else@example.com");
+
+    const html = await renderStatusFor(user.id);
+
+    expect(html).toMatch(/<a[^>]*href="\/api\/withings\/connect"/);
+  });
+
+  it("AC-DS7 (connected): a user with a whoop_tokens row sees a 'Connected' tag and no Connect action for that card", async () => {
+    const [user] = await sql`insert into users (email) values ('data-whoop-connected@example.com') returning id`;
+    vi.stubEnv("PRIMARY_USER_EMAIL", "data-whoop-connected-someone-else@example.com");
+    await sql`
+      insert into whoop_tokens (user_id, access_token_enc, refresh_token_enc, expires_at, updated_at)
+      values (${user.id}, 'enc', 'enc', now() + interval '1 hour', now())
+    `;
+
+    const html = await renderStatusFor(user.id);
+
+    expect(html).not.toContain('href="/api/whoop/connect"');
+    expect(html).toMatch(/Connected/);
+  });
+
+  it("AC-DS8 (cross-user isolation): user A's whoop_tokens row never leaks a 'Connected' state onto user B's own /data render", async () => {
+    const [userA] = await sql`insert into users (email) values ('data-whoop-a@example.com') returning id`;
+    const [userB] = await sql`insert into users (email) values ('data-whoop-b@example.com') returning id`;
+    vi.stubEnv("PRIMARY_USER_EMAIL", "data-whoop-isolation-someone-else@example.com");
+    await sql`
+      insert into whoop_tokens (user_id, access_token_enc, refresh_token_enc, expires_at, updated_at)
+      values (${userA.id}, 'enc', 'enc', now() + interval '1 hour', now())
+    `;
+
+    const htmlForB = await renderStatusFor(userB.id);
+
+    expect(htmlForB).toMatch(/<a[^>]*href="\/api\/whoop\/connect"/);
+  });
+
+  it("AC-DS9 (connected + failed last run compose correctly): a whoop_tokens row plus a failed sync_runs row render both the 'Connected' tag and the existing unconditional failure line together", async () => {
+    const [user] = await sql`insert into users (email) values ('data-whoop-connected-failed@example.com') returning id`;
+    vi.stubEnv("PRIMARY_USER_EMAIL", "data-whoop-connected-failed-someone-else@example.com");
+    await sql`
+      insert into whoop_tokens (user_id, access_token_enc, refresh_token_enc, expires_at, updated_at)
+      values (${user.id}, 'enc', 'enc', now() + interval '1 hour', now())
+    `;
+    await sql`
+      insert into sync_runs (source, user_id, started_at, finished_at, status, rows_synced)
+      values ('whoop', ${user.id}, now(), now(), 'failure', 0)
+    `;
+
+    const html = await renderStatusFor(user.id);
+
+    expect(html).not.toContain('href="/api/whoop/connect"');
+    expect(html).toMatch(/Connected/);
+    expect(html).toMatch(/Last run: failure at/);
+  });
+});
+
+/**
+ * AUTO-GENERATED TEST STUB — JerkAI Contract
+ * PRD Target: JerkAI — Build PRD: Data Page Redesign & Connect
+ *
+ * DO NOT EDIT test names, AC IDs, or stub assertions during implementation.
+ * Implementation code must be written to satisfy these stubs.
+ * Editing stubs to fit implementation triggers a blocking finding in jerkai-falsify-diff.
+ */
+describe("/data — AC-DS10/AC-DS11/AC-DS12: Fitdays connected-state via primary-user identity", () => {
+  it("AC-DS10 (bare case): a user whose id does not equal resolvePrimaryUserId()'s resolved id sees a 'Not connected' tag and a Connect button (not a link) for Fitdays", async () => {
+    const primaryEmail = "data-fitdays-primary-a@example.com";
+    await sql`insert into users (email) values (${primaryEmail})`;
+    const [other] = await sql`insert into users (email) values ('data-fitdays-other-a@example.com') returning id`;
+    vi.stubEnv("PRIMARY_USER_EMAIL", primaryEmail);
+
+    const html = await renderStatusFor(other.id);
+
+    expect(html).toContain("Not connected");
+    // Fitdays' Connect action is a client-side button, not a navigable href
+    // (AC-DS10) — a <button> element existing at all is the distinguishing
+    // signal, since Whoop/Withings's own not-connected Connect actions are
+    // real <a href> anchors (AC-DS6), never a <button>.
+    expect(html).toMatch(/<button[^>]*>[^<]*Connect[^<]*<\/button>/);
+  });
+
+  it("AC-DS11: a user whose id equals resolvePrimaryUserId()'s resolved id sees a 'Connected' tag and no Connect action for Fitdays", async () => {
+    const primaryEmail = "data-fitdays-primary-b@example.com";
+    const [primary] = await sql`insert into users (email) values (${primaryEmail}) returning id`;
+    vi.stubEnv("PRIMARY_USER_EMAIL", primaryEmail);
+
+    const html = await renderStatusFor(primary.id);
+
+    expect(html).toMatch(/Connected/);
+    expect(html).not.toMatch(/<button[^>]*>[^<]*Connect[^<]*<\/button>/);
+  });
+
+  it("AC-DS12 (fail-closed): when resolvePrimaryUserId() throws (PRIMARY_USER_EMAIL unset), the Fitdays card reads 'Not connected' and the rest of the page still renders — no 500", async () => {
+    const [user] = await sql`insert into users (email) values ('data-fitdays-failclosed@example.com') returning id`;
+    vi.stubEnv("PRIMARY_USER_EMAIL", "");
+
+    const html = await renderStatusFor(user.id);
+
+    expect(html).toContain("JerkAI");
+    expect(html).toContain("Scale");
+    expect(html).toContain("Performance");
+    expect(html).toContain("Not connected");
   });
 });
