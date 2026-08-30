@@ -3,7 +3,7 @@
 Reading protocol: **the Build PRD in `docs/prd/` is the spec of record** for the current slice; **`README.md` is schema/stack truth**; **this file is durable product context**. Deeper product management history (decision log, architecture rationale, prior build sessions) lives in a separate Career vault and can be provided on request; it is intentionally not in this repo.
 
 ## What JerkAI is
-A single-user personal health dashboard that turns a noisy daily body-fat reading into a trustworthy trend and, when the trend stalls, makes it fast to see which driver explains it. Also a public-built FDE portfolio artifact. No real biometric data is ever exposed publicly (the public demo uses synthetic data).
+A personal health dashboard, used by Albert and the friends he invites, that turns a noisy daily body-fat reading into a trustworthy trend and, when the trend stalls, makes it fast to see which driver explains it. Also a public-built FDE portfolio artifact. No real biometric data is ever exposed publicly (the public demo uses synthetic data).
 
 ## North star & driver tree
 North star: **body fat % trend** (7-day and 30-day rolling average) as the decision signal — but the **raw daily reading is always shown alongside it, never hidden or replaced**. Raw = record of truth; trend = the lens for deciding whether anything changed.

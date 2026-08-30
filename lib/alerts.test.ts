@@ -91,6 +91,29 @@ describe("sendSyncFailureAlert — degraded responses (must not throw)", () => {
   });
 });
 
+/**
+ * AUTO-GENERATED TEST STUB — JerkAI Contract
+ * PRD Target: JerkAI — Build PRD: Resend Sending Domain Switch
+ *
+ * DO NOT EDIT test names, AC IDs, or stub assertions during implementation.
+ * Implementation code must be written to satisfy these stubs.
+ * Editing stubs to fit implementation triggers a blocking finding in jerkai-falsify-diff.
+ */
+describe("sendSyncFailureAlert — sender domain (AC-ES1)", () => {
+  it("AC-ES1 POSTs a from address on the verified jerkai.app domain, never resend.dev", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ id: "email_abc123" }), { status: 200 }),
+    );
+
+    await sendSyncFailureAlert("subject line", "body text");
+
+    const [, init] = fetchMock.mock.calls[0];
+    const body = JSON.parse(init.body);
+    expect(body.from).toBe("JerkAI Sync <sync@jerkai.app>");
+    expect(body.from).not.toMatch(/resend\.dev/);
+  });
+});
+
 describe("sendSyncFailureAlert — missing configuration", () => {
   it.each([
     ["AUTH_RESEND_KEY", "SYNC_ALERT_EMAIL_TO"],

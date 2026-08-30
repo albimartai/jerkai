@@ -21,10 +21,9 @@ export async function sendSyncFailureAlert(subject: string, body: string): Promi
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        // onboarding@resend.dev delivers only to the Resend account owner's
-        // address — fine for a single-user app; switch to a verified
-        // jerkai.app sender when the domain is added to Resend.
-        from: "JerkAI Sync <onboarding@resend.dev>",
+        // Verified jerkai.app sending domain (docs/prd/resend-sending-domain-switch.md) —
+        // delivers regardless of which address SYNC_ALERT_EMAIL_TO holds.
+        from: "JerkAI Sync <sync@jerkai.app>",
         to: [to],
         subject,
         text: body,
