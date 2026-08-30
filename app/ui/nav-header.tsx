@@ -18,12 +18,17 @@ function resolutionHref(label: "Weekly" | "Daily", variant: NavVariant): string 
 
 const RESOLUTION_LABELS = ["Weekly", "Daily"] as const;
 
-// `active` is undefined on pages outside the Weekly/Daily resolution pair (Log Meal,
-// Settings → Targets) — neither resolution link highlights there.
+// `active` widens additively (Data Page Redesign & Connect, §0.8) from the original
+// Weekly/Daily resolution pair to all five live-variant links — Data, Log Meal, and
+// Targets now participate in the identical highlight mechanism Weekly/Daily already used,
+// with no new color or font (NFR-129/NFR-130). `undefined` still highlights nothing.
 export function NavHeader({
   active,
   variant = "live",
-}: { active?: "weekly" | "daily"; variant?: NavVariant } = {}) {
+}: {
+  active?: "weekly" | "daily" | "data" | "logmeal" | "targets";
+  variant?: NavVariant;
+} = {}) {
   return (
     <header className="flex items-center justify-between py-4">
       <span className="text-lg font-semibold tracking-tight">JerkAI</span>
@@ -61,24 +66,43 @@ export function NavHeader({
         ) : (
           <>
             {/* Log Meal ships in this slice (AC-M13) — the CTA returns per AC-D14's own
-                terms. "+ Log workout" stays absent (its slice hasn't shipped). */}
+                terms. "+ Log workout" stays absent (its slice hasn't shipped). Targets,
+                Log Meal, and Data (renamed from Status) each carry the same active-highlight
+                ternary Weekly/Daily already use (AC-DS18/AC-DS19/AC-DS21, §0.8) — the
+                zinc/emerald-consistent bg-zinc-900/dark:bg-zinc-100 formula, never a new
+                color. */}
             <Link
               href="/settings/targets"
-              className="ml-2 rounded-md px-2 py-1 text-sm text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-900"
+              aria-current={active === "targets" ? "page" : undefined}
+              className={`ml-2 rounded-md px-2 py-1 text-sm ${
+                active === "targets"
+                  ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                  : "text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-900"
+              }`}
             >
               Targets
             </Link>
             <Link
               href="/log-meal"
-              className="rounded-md px-3 py-1 text-sm text-zinc-600 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-900"
+              aria-current={active === "logmeal" ? "page" : undefined}
+              className={`rounded-md px-3 py-1 text-sm ${
+                active === "logmeal"
+                  ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                  : "text-zinc-600 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-900"
+              }`}
             >
               Log Meal
             </Link>
             <Link
-              href="/status"
-              className="rounded-md px-3 py-1 text-sm text-zinc-600 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-900"
+              href="/data"
+              aria-current={active === "data" ? "page" : undefined}
+              className={`rounded-md px-3 py-1 text-sm ${
+                active === "data"
+                  ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                  : "text-zinc-600 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-900"
+              }`}
             >
-              Status
+              Data
             </Link>
           </>
         )}

@@ -16,7 +16,7 @@ export default async function TargetsSettings() {
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 pb-10 font-sans">
-      <NavHeader />
+      <NavHeader active="targets" />
       <TargetsForm />
     </main>
   );
