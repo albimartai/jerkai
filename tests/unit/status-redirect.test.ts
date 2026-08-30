@@ -47,7 +47,10 @@ describe("/status — AC-DS2: redirects to /data", () => {
     }
 
     expect(isRedirectError(thrown)).toBe(true);
-    expect(getURLFromRedirectError(thrown as Error)).toBe("/data");
-    expect(getRedirectStatusCodeFromError(thrown as Error)).toBe(307);
+    // Non-behavioral: narrows `thrown` via the type guard instead of an `as Error`
+    // cast for strict-mode compile cleanliness. Expected values below are unchanged.
+    if (!isRedirectError(thrown)) throw new Error("unreachable — asserted above");
+    expect(getURLFromRedirectError(thrown)).toBe("/data");
+    expect(getRedirectStatusCodeFromError(thrown)).toBe(307);
   });
 });
