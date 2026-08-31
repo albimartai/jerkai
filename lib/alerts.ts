@@ -21,9 +21,11 @@ export async function sendSyncFailureAlert(subject: string, body: string): Promi
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        // Verified jerkai.app sending domain (docs/prd/resend-sending-domain-switch.md) —
-        // delivers regardless of which address SYNC_ALERT_EMAIL_TO holds.
-        from: "JerkAI Sync <sync@jerkai.app>",
+        // Verified mail.jerkai.app sending subdomain (docs/prd/resend-sending-domain-switch.md) —
+        // delivers regardless of which address SYNC_ALERT_EMAIL_TO holds. Moved off the
+        // bare jerkai.app root domain to isolate transactional-send reputation from the
+        // site's own domain (2026-08-31).
+        from: "JerkAI Sync <sync@mail.jerkai.app>",
         to: [to],
         subject,
         text: body,

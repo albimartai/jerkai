@@ -23,9 +23,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth(() => {
     providers: [
       Resend({
         // API key comes from AUTH_RESEND_KEY via Auth.js env inference.
-        // Verified jerkai.app sending domain (docs/prd/resend-sending-domain-switch.md) —
+        // Verified mail.jerkai.app sending subdomain (docs/prd/resend-sending-domain-switch.md) —
         // delivers to any allowlisted recipient, not just the Resend account owner.
-        from: "JerkAI <noreply@jerkai.app>",
+        // Moved off the bare jerkai.app root domain to isolate transactional-send
+        // reputation from the site's own domain (2026-08-31).
+        from: "JerkAI <noreply@mail.jerkai.app>",
       }),
     ],
     // JWT sessions so proxy.ts can verify a session without a database

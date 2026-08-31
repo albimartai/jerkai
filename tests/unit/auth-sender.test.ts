@@ -23,7 +23,13 @@ const authSource = readFileSync(
 
 describe("auth.ts Resend provider sender address (AC-ES2)", () => {
   it("AC-ES2 uses the verified jerkai.app sender literal and never resend.dev", () => {
-    expect(authSource).toContain('from: "JerkAI <noreply@jerkai.app>"');
+    // noreply@jerkai.app -> noreply@mail.jerkai.app (authorized value edit, 2026-08-31):
+    // the bare jerkai.app root domain was never actually verified in Resend, which broke
+    // magic-link sign-in in production ("domain is not verified" 403). Moved sending to a
+    // dedicated mail.jerkai.app subdomain, now verified, to isolate transactional-send
+    // reputation from the site's own domain per Resend's own recommendation. Same
+    // reasoning applies to lib/alerts.ts's sync@ sender (AC-ES1).
+    expect(authSource).toContain('from: "JerkAI <noreply@mail.jerkai.app>"');
     expect(authSource).not.toMatch(/resend\.dev/);
   });
 });

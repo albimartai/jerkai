@@ -109,7 +109,13 @@ describe("sendSyncFailureAlert — sender domain (AC-ES1)", () => {
 
     const [, init] = fetchMock.mock.calls[0];
     const body = JSON.parse(init.body);
-    expect(body.from).toBe("JerkAI Sync <sync@jerkai.app>");
+    // sync@jerkai.app -> sync@mail.jerkai.app (authorized value edit, 2026-08-31):
+    // the bare jerkai.app root domain was never actually verified in Resend, which
+    // broke magic-link sign-in in production ("domain is not verified" 403). Moved
+    // sending to a dedicated mail.jerkai.app subdomain, now verified, to isolate
+    // transactional-send reputation from the site's own domain per Resend's own
+    // recommendation. Same reasoning applies to auth.ts's noreply@ sender.
+    expect(body.from).toBe("JerkAI Sync <sync@mail.jerkai.app>");
     expect(body.from).not.toMatch(/resend\.dev/);
   });
 });
