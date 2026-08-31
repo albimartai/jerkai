@@ -2,8 +2,8 @@ import { neon } from "@neondatabase/serverless";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-// /data (app/data/page.tsx, relocated from app/status/page.tsx this slice,
-// PRD §0.3/§1) is a Server Component that queries sync_runs directly and
+// /connect (app/connect/page.tsx, relocated from app/data/page.tsx this
+// slice, PRD §1) is a Server Component that queries sync_runs directly and
 // calls auth() for the signed-in session. auth() is mocked so the page's own
 // logic runs against a real disposable Neon branch without the full
 // Auth.js/session-cookie machinery; the page's async function is called and
@@ -11,12 +11,13 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 // with react-dom/server, the same pattern tests/unit/*-render.test.tsx already
 // use for server-rendered pages.
 //
-// Prospective import (PRD §1): app/data/page.tsx does not exist yet — this
-// resolves once the build agent performs the git mv from app/status/page.tsx.
+// Prospective import (PRD §1): app/connect/page.tsx does not exist yet —
+// this resolves once the build agent performs the git mv from
+// app/data/page.tsx.
 const authMock = vi.hoisted(() => vi.fn());
 vi.mock("@/auth", () => ({ auth: authMock }));
 
-import Data from "@/app/data/page";
+import Connect from "@/app/connect/page";
 import { LocalTime } from "@/app/ui/local-time";
 
 const DATABASE_URL = process.env.DATABASE_URL ?? "";
@@ -25,13 +26,13 @@ const sql = neon(DATABASE_URL || "postgresql://unset:unset@unset/unset"); //gitl
 
 async function renderStatusFor(userId: number): Promise<string> {
   authMock.mockResolvedValue({ user: { id: String(userId) } });
-  const element = await Data();
+  const element = await Connect();
   return renderToStaticMarkup(element);
 }
 
 async function renderStatusElementFor(userId: number) {
   authMock.mockResolvedValue({ user: { id: String(userId) } });
-  return Data();
+  return Connect();
 }
 
 // renderToStaticMarkup never fires React effects, so LocalTime — a client
@@ -92,11 +93,13 @@ afterEach(() => {
  * AUTO-GENERATED TEST STUB — JerkAI Contract
  * PRD Target: JerkAI — Build PRD: Whoop Multi-Tenancy
  *
- * DO NOT EDIT test names, AC IDs, or stub assertions during implementation.
+ * DO NOT EDIT test names, AC IDs, or stub assertions during implementation,
+ * except the exact value edits and name grooms this file's own PRD-cited
+ * slice enumerates.
  * Implementation code must be written to satisfy these stubs.
  * Editing stubs to fit implementation triggers a blocking finding in jerkai-falsify-diff.
  */
-describe("/status — AC-WT8: sync history scoped to the signed-in user", () => {
+describe("/connect — AC-WT8: sync history scoped to the signed-in user", () => {
   it("AC-WT8: a signed-in user sees only their own sync history, never another connected user's", async () => {
     const [userA] = await sql`insert into users (email) values ('status-test-a@example.com') returning id`;
     const [userB] = await sql`insert into users (email) values ('status-test-b@example.com') returning id`;
@@ -144,12 +147,14 @@ describe("/status — AC-WT8: sync history scoped to the signed-in user", () => 
  * AUTO-GENERATED TEST STUB — JerkAI Contract
  * PRD Target: JerkAI — Build PRD: Nav Header Cleanup & Status Page Chrome
  *
- * DO NOT EDIT test names, AC IDs, or stub assertions during implementation.
+ * DO NOT EDIT test names, AC IDs, or stub assertions during implementation,
+ * except the exact value edits and name grooms this file's own PRD-cited
+ * slice enumerates.
  * Implementation code must be written to satisfy these stubs.
  * Editing stubs to fit implementation triggers a blocking finding in jerkai-falsify-diff.
  */
-describe("/status — AC-D18: shared header chrome", () => {
-  it("AC-D18: /status renders the same NavHeader as every other gated page, with neither Weekly nor Daily active", async () => {
+describe("/connect — AC-D18: shared header chrome", () => {
+  it("AC-D18: /connect renders the same NavHeader as every other gated page, with neither Weekly nor Daily active", async () => {
     const [user] = await sql`insert into users (email) values ('status-header-test@example.com') returning id`;
 
     const html = await renderStatusFor(user.id);
@@ -159,9 +164,10 @@ describe("/status — AC-D18: shared header chrome", () => {
     // Content AND order (AC-D18's own language) — a scramble must fail this,
     // not just an absence, so each href's index must strictly increase.
     // PRD-authorized exception to this block's own DO-NOT-EDIT header
-    // (Data Page Redesign & Connect, §0.3): last entry "/status" -> "/data",
-    // the identical convention this file already used twice for AC-WT8/AC-ST1.
-    const hrefs = ["/weekly", "/daily", "/settings/targets", "/log-meal", "/data"];
+    // (Data Page Redesign & Connect, §0.3): last entry "/status" -> "/data"
+    // -> "/connect", the identical convention this file already used twice
+    // for AC-WT8/AC-ST1.
+    const hrefs = ["/weekly", "/daily", "/settings/targets", "/log-meal", "/connect"];
     const indices = hrefs.map((href) => html.indexOf(`href="${href}"`));
     for (const index of indices) {
       expect(index).toBeGreaterThan(-1);
@@ -178,11 +184,13 @@ describe("/status — AC-D18: shared header chrome", () => {
  * AUTO-GENERATED TEST STUB — JerkAI Contract
  * PRD Target: JerkAI — Build PRD: Status Sync Times — Local Timezone Display
  *
- * DO NOT EDIT test names, AC IDs, or stub assertions during implementation.
+ * DO NOT EDIT test names, AC IDs, or stub assertions during implementation,
+ * except the exact value edits and name grooms this file's own PRD-cited
+ * slice enumerates.
  * Implementation code must be written to satisfy these stubs.
  * Editing stubs to fit implementation triggers a blocking finding in jerkai-falsify-diff.
  */
-describe("/status — AC-ST1/AC-ST2/AC-ST3: local-timezone timestamp display", () => {
+describe("/connect — AC-ST1/AC-ST2/AC-ST3: local-timezone timestamp display", () => {
   it("AC-ST1 (bare case): a source with no successful sync still shows the literal 'never' text, unaffected by this slice's timezone change", async () => {
     const [user] = await sql`insert into users (email) values ('status-tz-bare@example.com') returning id`;
 
@@ -253,11 +261,13 @@ describe("/status — AC-ST1/AC-ST2/AC-ST3: local-timezone timestamp display", (
  * AUTO-GENERATED TEST STUB — JerkAI Contract
  * PRD Target: JerkAI — Build PRD: Withings Smart-Scale Integration
  *
- * DO NOT EDIT test names, AC IDs, or stub assertions during implementation.
+ * DO NOT EDIT test names, AC IDs, or stub assertions during implementation,
+ * except the exact value edits and name grooms this file's own PRD-cited
+ * slice enumerates.
  * Implementation code must be written to satisfy these stubs.
  * Editing stubs to fit implementation triggers a blocking finding in jerkai-falsify-diff.
  */
-describe("/status — AC-WS13: a connected user's own Withings sync history", () => {
+describe("/connect — AC-WS13: a connected user's own Withings sync history", () => {
   it("AC-WS13: a signed-in user with a connected Withings account sees their own Withings lane, achieved solely by ACTIVE_SYNC_SOURCES gaining 'withings' (no other change to this page)", async () => {
     const [user] = await sql`insert into users (email) values ('status-withings-test@example.com') returning id`;
 
@@ -271,7 +281,7 @@ describe("/status — AC-WS13: a connected user's own Withings sync history", ()
     expect(html).not.toMatch(/failure/i);
   });
 
-  it("AC-WS13: a Withings sync failure for one user is never shown on another user's /status page", async () => {
+  it("AC-WS13: a Withings sync failure for one user is never shown on another user's /connect page", async () => {
     const [userA] = await sql`insert into users (email) values ('status-withings-a@example.com') returning id`;
     const [userB] = await sql`insert into users (email) values ('status-withings-b@example.com') returning id`;
 
@@ -289,18 +299,20 @@ describe("/status — AC-WS13: a connected user's own Withings sync history", ()
  * AUTO-GENERATED TEST STUB — JerkAI Contract
  * PRD Target: JerkAI — Build PRD: Data Page Redesign & Connect
  *
- * DO NOT EDIT test names, AC IDs, or stub assertions during implementation.
+ * DO NOT EDIT test names, AC IDs, or stub assertions during implementation,
+ * except the exact value edits and name grooms this file's own PRD-cited
+ * slice enumerates.
  * Implementation code must be written to satisfy these stubs.
  * Editing stubs to fit implementation triggers a blocking finding in jerkai-falsify-diff.
  */
-describe("/data — AC-DS1/AC-DS4/AC-DS5: categorized card layout", () => {
+describe("/connect — AC-DS1/AC-DS4/AC-DS5: categorized card layout", () => {
   it("AC-DS1 (bare case): a non-primary user with no tokens and zero sync_runs sees both category headings, three 'Not connected' tags, and 'never' x3", async () => {
     const [user] = await sql`insert into users (email) values ('data-bare-case@example.com') returning id`;
     vi.stubEnv("PRIMARY_USER_EMAIL", "data-bare-case-someone-else@example.com");
 
     const html = await renderStatusFor(user.id);
 
-    expect(html).toContain(">Data<");
+    expect(html).toContain(">Connect<");
     expect(html).toContain("Scale");
     expect(html).toContain("Performance");
     expect((html.match(/Not connected/g) ?? []).length).toBe(3);
@@ -342,19 +354,21 @@ describe("/data — AC-DS1/AC-DS4/AC-DS5: categorized card layout", () => {
  * AUTO-GENERATED TEST STUB — JerkAI Contract
  * PRD Target: JerkAI — Build PRD: Data Page Redesign & Connect
  *
- * DO NOT EDIT test names, AC IDs, or stub assertions during implementation.
+ * DO NOT EDIT test names, AC IDs, or stub assertions during implementation,
+ * except the exact value edits and name grooms this file's own PRD-cited
+ * slice enumerates.
  * Implementation code must be written to satisfy these stubs.
  * Editing stubs to fit implementation triggers a blocking finding in jerkai-falsify-diff.
  */
-describe("/data — AC-DS3: nav link renamed Status -> Data", () => {
-  it("AC-DS3: the resolution-adjacent link that used to read 'Status' now reads exactly 'Data' with href=/data, not 'Status'/'/status'", async () => {
+describe("/connect — AC-DS3: nav link renamed Status -> Data -> Connect", () => {
+  it("AC-DS3: the resolution-adjacent link that used to read 'Status' then 'Data' now reads exactly 'Connect' with href=/connect, not 'Data'/'/data'", async () => {
     const [user] = await sql`insert into users (email) values ('data-nav-rename@example.com') returning id`;
     vi.stubEnv("PRIMARY_USER_EMAIL", "data-nav-rename-someone-else@example.com");
 
     const html = await renderStatusFor(user.id);
 
-    expect(html).toContain('href="/data"');
-    expect(html).toContain(">Data<");
+    expect(html).toContain('href="/connect"');
+    expect(html).toContain(">Connect<");
     expect(html).not.toContain('href="/status"');
     expect(html).not.toContain(">Status<");
   });
@@ -364,11 +378,13 @@ describe("/data — AC-DS3: nav link renamed Status -> Data", () => {
  * AUTO-GENERATED TEST STUB — JerkAI Contract
  * PRD Target: JerkAI — Build PRD: Data Page Redesign & Connect
  *
- * DO NOT EDIT test names, AC IDs, or stub assertions during implementation.
+ * DO NOT EDIT test names, AC IDs, or stub assertions during implementation,
+ * except the exact value edits and name grooms this file's own PRD-cited
+ * slice enumerates.
  * Implementation code must be written to satisfy these stubs.
  * Editing stubs to fit implementation triggers a blocking finding in jerkai-falsify-diff.
  */
-describe("/data — AC-DS6/AC-DS7/AC-DS8/AC-DS9: Whoop/Withings connected-state and Connect actions", () => {
+describe("/connect — AC-DS6/AC-DS7/AC-DS8/AC-DS9: Whoop/Withings connected-state and Connect actions", () => {
   it("AC-DS6 (bare/not-connected): a user with no whoop_tokens row sees a Connect anchor with href=/api/whoop/connect", async () => {
     const [user] = await sql`insert into users (email) values ('data-whoop-bare@example.com') returning id`;
     vi.stubEnv("PRIMARY_USER_EMAIL", "data-whoop-bare-someone-else@example.com");
@@ -401,7 +417,7 @@ describe("/data — AC-DS6/AC-DS7/AC-DS8/AC-DS9: Whoop/Withings connected-state 
     expect(html).toMatch(/Connected/);
   });
 
-  it("AC-DS8 (cross-user isolation): user A's whoop_tokens row never leaks a 'Connected' state onto user B's own /data render", async () => {
+  it("AC-DS8 (cross-user isolation): user A's whoop_tokens row never leaks a 'Connected' state onto user B's own /connect render", async () => {
     const [userA] = await sql`insert into users (email) values ('data-whoop-a@example.com') returning id`;
     const [userB] = await sql`insert into users (email) values ('data-whoop-b@example.com') returning id`;
     vi.stubEnv("PRIMARY_USER_EMAIL", "data-whoop-isolation-someone-else@example.com");
@@ -439,11 +455,13 @@ describe("/data — AC-DS6/AC-DS7/AC-DS8/AC-DS9: Whoop/Withings connected-state 
  * AUTO-GENERATED TEST STUB — JerkAI Contract
  * PRD Target: JerkAI — Build PRD: Data Page Redesign & Connect
  *
- * DO NOT EDIT test names, AC IDs, or stub assertions during implementation.
+ * DO NOT EDIT test names, AC IDs, or stub assertions during implementation,
+ * except the exact value edits and name grooms this file's own PRD-cited
+ * slice enumerates.
  * Implementation code must be written to satisfy these stubs.
  * Editing stubs to fit implementation triggers a blocking finding in jerkai-falsify-diff.
  */
-describe("/data — AC-DS10/AC-DS11/AC-DS12: Fitdays connected-state via primary-user identity", () => {
+describe("/connect — AC-DS10/AC-DS11/AC-DS12: Fitdays connected-state via primary-user identity", () => {
   it("AC-DS10 (bare case): a user whose id does not equal resolvePrimaryUserId()'s resolved id sees a 'Not connected' tag and a Connect button (not a link) for Fitdays", async () => {
     const primaryEmail = "data-fitdays-primary-a@example.com";
     await sql`insert into users (email) values (${primaryEmail})`;
