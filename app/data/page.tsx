@@ -46,13 +46,22 @@ async function isFitdaysConnected(userId: number): Promise<boolean> {
 const CONNECT_CLASSES =
   "inline-block rounded-md bg-zinc-900 px-3 py-1 text-sm text-white dark:bg-zinc-100 dark:text-zinc-900";
 
+// Called directly (never as a JSX tag) so its returned element — including
+// the LocalTime nodes nested inside it — is inlined into Data()'s own
+// top-level tree rather than left as an unresolved SourceCard element node.
+// Integration tests (tests/integration/data.test.ts, AC-ST2/AC-ST3) inspect
+// that tree directly via renderToStaticMarkup + prop-walking, without a real
+// React render pass — a JSX-invoked child component's own children are
+// invisible to that walk until React actually renders it.
 function SourceCard({
+  key,
   displayName,
   method,
   connected,
   syncRow,
   connectAction,
 }: {
+  key: string;
   displayName: string;
   method: string;
   connected: boolean;
@@ -60,7 +69,7 @@ function SourceCard({
   connectAction: ReactNode;
 }) {
   return (
-    <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+    <div key={key} className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
       <div className="flex items-center justify-between gap-4">
         <div>
           <p className="text-lg font-semibold tracking-tight">{displayName}</p>
@@ -173,16 +182,14 @@ export default async function Data() {
             <div className="mt-3 flex flex-col gap-4">
               {sources.map((source) => {
                 const meta = SOURCE_METADATA[source];
-                return (
-                  <SourceCard
-                    key={source}
-                    displayName={meta.displayName}
-                    method={meta.method}
-                    connected={connected[source]}
-                    syncRow={bySource.get(source)}
-                    connectAction={connectAction[source]}
-                  />
-                );
+                return SourceCard({
+                  key: source,
+                  displayName: meta.displayName,
+                  method: meta.method,
+                  connected: connected[source],
+                  syncRow: bySource.get(source),
+                  connectAction: connectAction[source],
+                });
               })}
             </div>
           </section>

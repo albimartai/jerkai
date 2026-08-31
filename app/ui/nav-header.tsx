@@ -70,10 +70,12 @@ export function NavHeader({
                 Log Meal, and Data (renamed from Status) each carry the same active-highlight
                 ternary Weekly/Daily already use (AC-DS18/AC-DS19/AC-DS21, §0.8) — the
                 zinc/emerald-consistent bg-zinc-900/dark:bg-zinc-100 formula, never a new
-                color. */}
+                color. No aria-current here (unlike Weekly/Daily, pre-existing): AC-D18's
+                DO NOT EDIT test asserts /data renders with zero aria-current="page"
+                anywhere, and the PRD's own AC-DS18/19/21 text specifies only the visual
+                treatment, not an aria-current claim. */}
             <Link
               href="/settings/targets"
-              aria-current={active === "targets" ? "page" : undefined}
               className={`ml-2 rounded-md px-2 py-1 text-sm ${
                 active === "targets"
                   ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
@@ -84,7 +86,6 @@ export function NavHeader({
             </Link>
             <Link
               href="/log-meal"
-              aria-current={active === "logmeal" ? "page" : undefined}
               className={`rounded-md px-3 py-1 text-sm ${
                 active === "logmeal"
                   ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
@@ -95,7 +96,6 @@ export function NavHeader({
             </Link>
             <Link
               href="/data"
-              aria-current={active === "data" ? "page" : undefined}
               className={`rounded-md px-3 py-1 text-sm ${
                 active === "data"
                   ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
