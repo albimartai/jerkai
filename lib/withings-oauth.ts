@@ -201,7 +201,7 @@ export async function getFreshAccessToken(
 }
 
 // Data Page Redesign & Connect (§1, NFR-120): the mirrored, direct read-only
-// existence check for the /data page's "Connected" tag — never calls or
+// existence check for the /connect page's "Connected" tag — never calls or
 // wraps getFreshAccessToken, for the identical reason as
 // lib/whoop-oauth.ts#hasWhoopTokens.
 export async function hasWithingsTokens(userId: number): Promise<boolean> {

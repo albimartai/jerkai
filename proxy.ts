@@ -36,9 +36,10 @@ import { auth } from "@/auth";
 //     hypothetical /demo-anything or /demography stays gated.
 //   - Next.js static assets and the favicon
 // Pages also re-check the session themselves (defense in depth) — see
-// app/page.tsx and app/data/page.tsx. (app/status/page.tsx is now just a
-// redirect("/data") stub, Data Page Redesign & Connect AC-DS2 — it no longer
-// performs that re-check itself.)
+// app/page.tsx and app/connect/page.tsx. (app/status/page.tsx and
+// app/data/page.tsx are now both just redirect("/connect") stubs, Rename
+// /data Page to /connect AC-DS23/AC-DS24 — neither performs that re-check
+// itself.)
 //
 // The demo.jerkai.app HOST is handled entirely here, in proxy()'s body, not
 // via next.config.ts's rewrites — and not via a matcher exclusion either.

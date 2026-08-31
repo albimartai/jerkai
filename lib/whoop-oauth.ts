@@ -168,7 +168,7 @@ export async function getFreshAccessToken(
 }
 
 // Data Page Redesign & Connect (§1, NFR-120): a direct, read-only existence
-// check for the /data page's "Connected" tag — never calls or wraps
+// check for the /connect page's "Connected" tag — never calls or wraps
 // getFreshAccessToken, which proactively refreshes and re-persists tokens as
 // a side effect of being called (confirmed above, getFreshAccessToken's own
 // docstring). Viewing the page must never rotate a stored refresh token.
