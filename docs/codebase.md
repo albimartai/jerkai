@@ -7,7 +7,7 @@ cite a fact instead of re-deriving it. It covers modules, data flow, conventions
 It deliberately does not cover product intent (`docs/context.md`), schema DDL or local setup
 (`README.md`), or process (`docs/definition-of-ready-and-done.md`).
 
-**Derived at:** commit `0c98f06` (branch `feat/data-page-redesign-connect`, pre-merge), 2026-08-30.
+**Derived at:** commit `b4952f5` (branch `feat/connect-page-rename`, pre-merge), 2026-08-31.
 
 **Staleness rule.** This is a snapshot of a moving target. A PRD citing it must re-verify
 the specific claims it leans on. Where a claim disagrees with the code, **the file is wrong
@@ -131,10 +131,11 @@ and either can be null/empty regardless of the other).
 `/daily` → `fetchDashboardData(90, userId)` plus the sibling `fetchTargets()` +
 `fetchCalorieSeries(axis, targets)` → `Dashboard`. The 30/90 toggle and the hover crosshair
 re-render client-side from data already held — no second fetch. All six gated pages (`/`,
-`/daily`, `/weekly`, `/log-meal`, `/settings/targets`, `/data`) are
-`export const dynamic = "force-dynamic"` and re-check `auth()` themselves. (`/status` is now
-a plain `redirect("/data")` stub — no data fetch, no auth re-check of its own,
-`docs/prd/data-page-redesign-and-connect.md` AC-DS2.)
+`/daily`, `/weekly`, `/log-meal`, `/settings/targets`, `/connect`) are
+`export const dynamic = "force-dynamic"` and re-check `auth()` themselves. (`/status` and
+`/data` are now both plain `redirect("/connect")` stubs — no data fetch, no auth re-check of
+their own, `docs/prd/rename-data-page-to-connect.md` AC-DS23/AC-DS24, amending AC-DS2 from
+`docs/prd/data-page-redesign-and-connect.md` in place.)
 
 **Meal write.** `logMealAction` / `updateMealEntryAction` / `deleteMealEntryAction` in
 `app/log-meal/actions.ts`: re-check `auth()` → validate → write → `revalidatePath("/log-meal")`
@@ -284,13 +285,14 @@ not in either checkout, so its ids are read from source, tests and commit subjec
 | `AC-DR` | jerkai | 9 | Dashboard Multi-Source Metric Resolution & Tagging (`docs/prd/dashboard-multi-source-metric-resolution-and-tagging.md`, PR #34) |
 | `AC-ES` | jerkai | 6 | Resend Sending Domain Switch (`docs/prd/resend-sending-domain-switch.md`, this slice) |
 | `AC-MF` | jerkai-mcp | 9 | MCP metric registry, slice 1 (`AC-MF9`, the vendor drift check) |
-| `AC-DS` | jerkai | 21 | Data Page Redesign & Connect (`docs/prd/data-page-redesign-and-connect.md`, this slice) |
+| `AC-DS` | jerkai | 25 | Data Page Redesign & Connect (`docs/prd/data-page-redesign-and-connect.md`); AC-DS22–AC-DS25 added by Rename /data Page to /connect (`docs/prd/rename-data-page-to-connect.md`, this slice) |
 
 **NFR** is one ascending series **per repo**, not per-slice and not global across repos
-(DL-2026-07-31-a). In **jerkai** it is numeric, high-water mark **NFR-130** as of this slice
-(NFR-120–130, Data Page Redesign & Connect, `docs/prd/data-page-redesign-and-connect.md`;
-before it, high-water mark was NFR-119, NFR-116–119, `docs/prd/resend-sending-domain-switch.md`;
-before that, NFR-115
+(DL-2026-07-31-a). In **jerkai** it is numeric, high-water mark **NFR-135** as of this slice
+(NFR-131–135, Rename /data Page to /connect, `docs/prd/rename-data-page-to-connect.md`;
+before it, high-water mark was NFR-130, NFR-120–130, Data Page Redesign & Connect,
+`docs/prd/data-page-redesign-and-connect.md`; before that, high-water mark was NFR-119,
+NFR-116–119, `docs/prd/resend-sending-domain-switch.md`; before that, NFR-115
 from `docs/prd/dashboard-multi-source-metric-resolution-and-tagging.md`, PR #34 — this
 table's prior high-water mark of NFR-97 was stale, understating it: it omitted the
 reservations made by Extend Sign-In Allowlist, Multi-User Data Model Retrofit, Withings
