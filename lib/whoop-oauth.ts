@@ -167,6 +167,17 @@ export async function getFreshAccessToken(
   return refreshed.access_token;
 }
 
+// Data Page Redesign & Connect (§1, NFR-120): a direct, read-only existence
+// check for the /data page's "Connected" tag — never calls or wraps
+// getFreshAccessToken, which proactively refreshes and re-persists tokens as
+// a side effect of being called (confirmed above, getFreshAccessToken's own
+// docstring). Viewing the page must never rotate a stored refresh token.
+export async function hasWhoopTokens(userId: number): Promise<boolean> {
+  const sql = getSql();
+  const rows = await sql`select 1 from whoop_tokens where user_id = ${userId} limit 1`;
+  return rows.length > 0;
+}
+
 // The cron loop's iteration source (app/api/whoop/sync/route.ts, §0/NFR-77) —
 // every row in whoop_tokens already carries the user_id to attribute pulls
 // to; this joins to users for the email AC-WT9's failure alert names.

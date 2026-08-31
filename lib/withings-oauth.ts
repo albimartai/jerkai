@@ -200,6 +200,16 @@ export async function getFreshAccessToken(
   return refreshed.access_token;
 }
 
+// Data Page Redesign & Connect (§1, NFR-120): the mirrored, direct read-only
+// existence check for the /data page's "Connected" tag — never calls or
+// wraps getFreshAccessToken, for the identical reason as
+// lib/whoop-oauth.ts#hasWhoopTokens.
+export async function hasWithingsTokens(userId: number): Promise<boolean> {
+  const sql = getSql();
+  const rows = await sql`select 1 from withings_tokens where user_id = ${userId} limit 1`;
+  return rows.length > 0;
+}
+
 // The cron loop's iteration source (app/api/withings/sync/route.ts) — every
 // row in withings_tokens already carries the user_id to attribute pulls to;
 // this joins to users for the email AC-WS14's failure alert names.

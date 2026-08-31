@@ -7,7 +7,7 @@ cite a fact instead of re-deriving it. It covers modules, data flow, conventions
 It deliberately does not cover product intent (`docs/context.md`), schema DDL or local setup
 (`README.md`), or process (`docs/definition-of-ready-and-done.md`).
 
-**Derived at:** commit `3d86ba8` (branch `feat/footer-privacy-link`, pre-merge), 2026-08-25.
+**Derived at:** commit `0c98f06` (branch `feat/data-page-redesign-connect`, pre-merge), 2026-08-30.
 
 **Staleness rule.** This is a snapshot of a moving target. A PRD citing it must re-verify
 the specific claims it leans on. Where a claim disagrees with the code, **the file is wrong
@@ -38,7 +38,7 @@ means a colocated `lib/**/*.test.ts`; tests living under `tests/` are named inst
 | Module | Purpose | Pure | Internal imports | Test |
 |---|---|---|---|---|
 | `db.ts` | `getSql()` — lazy Neon client; throws if `DATABASE_URL` unset | no | — | none |
-| `sources.ts` | `READING_SOURCES` (fitdays, whoop, apple_health), `ACTIVE_SYNC_SOURCES` (fitdays, whoop) | yes | — | none |
+| `sources.ts` | `READING_SOURCES` (fitdays, whoop, apple_health, withings), `ACTIVE_SYNC_SOURCES` (fitdays, whoop, withings) | yes | — | none |
 | `readings.ts` | `upsertReading()` — the single write path into `biometric_readings` | no | `db`, `health-export`, `sources` | via `tests/integration/` |
 | `sync-runs.ts` | `recordSyncRun()` — one `sync_runs` row per pipe run | no | `db`, `sources` | none |
 | `alerts.ts` | `sendSyncFailureAlert()` — Resend email; every failure degrades to `console.error` | no | — | yes |
@@ -131,8 +131,10 @@ and either can be null/empty regardless of the other).
 `/daily` → `fetchDashboardData(90, userId)` plus the sibling `fetchTargets()` +
 `fetchCalorieSeries(axis, targets)` → `Dashboard`. The 30/90 toggle and the hover crosshair
 re-render client-side from data already held — no second fetch. All six gated pages (`/`,
-`/daily`, `/weekly`, `/log-meal`, `/settings/targets`, `/status`) are
-`export const dynamic = "force-dynamic"` and re-check `auth()` themselves.
+`/daily`, `/weekly`, `/log-meal`, `/settings/targets`, `/data`) are
+`export const dynamic = "force-dynamic"` and re-check `auth()` themselves. (`/status` is now
+a plain `redirect("/data")` stub — no data fetch, no auth re-check of its own,
+`docs/prd/data-page-redesign-and-connect.md` AC-DS2.)
 
 **Meal write.** `logMealAction` / `updateMealEntryAction` / `deleteMealEntryAction` in
 `app/log-meal/actions.ts`: re-check `auth()` → validate → write → `revalidatePath("/log-meal")`
@@ -282,10 +284,13 @@ not in either checkout, so its ids are read from source, tests and commit subjec
 | `AC-DR` | jerkai | 9 | Dashboard Multi-Source Metric Resolution & Tagging (`docs/prd/dashboard-multi-source-metric-resolution-and-tagging.md`, PR #34) |
 | `AC-ES` | jerkai | 6 | Resend Sending Domain Switch (`docs/prd/resend-sending-domain-switch.md`, this slice) |
 | `AC-MF` | jerkai-mcp | 9 | MCP metric registry, slice 1 (`AC-MF9`, the vendor drift check) |
+| `AC-DS` | jerkai | 21 | Data Page Redesign & Connect (`docs/prd/data-page-redesign-and-connect.md`, this slice) |
 
 **NFR** is one ascending series **per repo**, not per-slice and not global across repos
-(DL-2026-07-31-a). In **jerkai** it is numeric, high-water mark **NFR-119** as of this slice
-(NFR-116–119, this slice, `docs/prd/resend-sending-domain-switch.md`; before it, NFR-115
+(DL-2026-07-31-a). In **jerkai** it is numeric, high-water mark **NFR-130** as of this slice
+(NFR-120–130, Data Page Redesign & Connect, `docs/prd/data-page-redesign-and-connect.md`;
+before it, high-water mark was NFR-119, NFR-116–119, `docs/prd/resend-sending-domain-switch.md`;
+before that, NFR-115
 from `docs/prd/dashboard-multi-source-metric-resolution-and-tagging.md`, PR #34 — this
 table's prior high-water mark of NFR-97 was stale, understating it: it omitted the
 reservations made by Extend Sign-In Allowlist, Multi-User Data Model Retrofit, Withings
