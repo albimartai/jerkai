@@ -276,20 +276,21 @@ not in either checkout, so its ids are read from source, tests and commit subjec
 | `AC-AB` | jerkai | 9 | Demo About |
 | `AC-AU` | jerkai | 7 | Extend Sign-In Allowlist (`docs/prd/extend-signin-allowlist.md`) |
 | `AC-MU` | jerkai | 12 | Multi-User Data Model Retrofit (`docs/prd/multi-user-data-model-retrofit.md`) |
-| `AC-WT` | jerkai | 13 | Whoop Multi-Tenancy |
+| `AC-WT` | jerkai | 19 | Whoop Multi-Tenancy; AC-WT14–19 added by OAuth Callback Identity Fallback (`docs/prd/oauth-callback-identity-fallback.md`, this slice) |
 | `AC-PUE` | jerkai | 4 | Primary User Email Alert Gap (`AC-PUE4` is an ops/manual check, not code-tested) |
 | `AC-PM` | jerkai | 4 | Preview Migration Gap Fix (`docs/prd/preview-migration-gap-fix.md`; all four ACs are ops/manual checks, not code-tested) |
 | `AC-ST` | jerkai | 4 | Status Sync Times — Local Timezone (`docs/prd/status-sync-local-timezone.md`, PR #31, shipped 2026-08-24) |
 | `AC-FT` | jerkai | 4 | Footer Privacy Policy Link (`docs/prd/footer-privacy-link.md`; `AC-FT3`/`AC-FT4` are regression checks satisfied by existing/full-suite test runs, not new assertions). The NFR-92 no-duplication test checks `href="/privacy"`/`<footer` rather than the PRD §6 text's literal `"Privacy Policy"` substring — a bare substring check would false-positive against `app/privacy/page.tsx`'s own `<h1>Privacy Policy</h1>`, so the as-built check is the correct one. |
-| `AC-WS` | jerkai | 20 | Withings Smart-Scale Integration (`docs/prd/withings-smart-scale-integration.md`, PR #33) |
+| `AC-WS` | jerkai | 26 | Withings Smart-Scale Integration (`docs/prd/withings-smart-scale-integration.md`, PR #33); AC-WS21–26 added by OAuth Callback Identity Fallback (`docs/prd/oauth-callback-identity-fallback.md`, this slice) |
 | `AC-DR` | jerkai | 9 | Dashboard Multi-Source Metric Resolution & Tagging (`docs/prd/dashboard-multi-source-metric-resolution-and-tagging.md`, PR #34) |
 | `AC-ES` | jerkai | 6 | Resend Sending Domain Switch (`docs/prd/resend-sending-domain-switch.md`, this slice) |
 | `AC-MF` | jerkai-mcp | 9 | MCP metric registry, slice 1 (`AC-MF9`, the vendor drift check) |
 | `AC-DS` | jerkai | 25 | Data Page Redesign & Connect (`docs/prd/data-page-redesign-and-connect.md`); AC-DS22–AC-DS25 added by Rename /data Page to /connect (`docs/prd/rename-data-page-to-connect.md`, this slice) |
 
 **NFR** is one ascending series **per repo**, not per-slice and not global across repos
-(DL-2026-07-31-a). In **jerkai** it is numeric, high-water mark **NFR-135** as of this slice
-(NFR-131–135, Rename /data Page to /connect, `docs/prd/rename-data-page-to-connect.md`;
+(DL-2026-07-31-a). In **jerkai** it is numeric, high-water mark **NFR-140** as of this slice
+(NFR-136–140, OAuth Callback Identity Fallback, `docs/prd/oauth-callback-identity-fallback.md`;
+before it, high-water mark was NFR-135, NFR-131–135, Rename /data Page to /connect, `docs/prd/rename-data-page-to-connect.md`;
 before it, high-water mark was NFR-130, NFR-120–130, Data Page Redesign & Connect,
 `docs/prd/data-page-redesign-and-connect.md`; before that, high-water mark was NFR-119,
 NFR-116–119, `docs/prd/resend-sending-domain-switch.md`; before that, NFR-115
