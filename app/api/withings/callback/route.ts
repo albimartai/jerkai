@@ -4,15 +4,21 @@ import { cookies } from "next/headers";
 import { after } from "next/server";
 
 import { auth } from "@/auth";
-import { isBoundToInitiatingUser } from "@/lib/withings-oauth-binding";
+import { resolveCallbackIdentity } from "@/lib/withings-oauth-binding";
 import { exchangeCode, isFirstConnect, saveTokens } from "@/lib/withings-oauth";
 
 // Withings' OAuth redirect target. The path is registered VERBATIM as the
 // Redirect URL in the Withings Partner Hub — renaming it breaks the
 // handshake with a redirect_uri mismatch. Excluded from proxy.ts's session
-// gate (AC-WS20/NFR-108); gated here instead by the same three checks
-// app/api/whoop/callback/route.ts uses: state-cookie match, a fresh
-// session, and the withings_oauth_user binding cookie (AC-WS5, NFR-99).
+// gate (AC-WS20/NFR-108); gated here instead by the state-cookie match and
+// the withings_oauth_user binding cookie (AC-WS5, NFR-99), with the session
+// check demoted from a hard gate to a best-available identity source —
+// AC-WS21-26, NFR-136-140 (JerkAI - Build PRD - OAuth Callback Identity
+// Fallback, §0): a live, matching session is preferred, but its total
+// absence (a browser-context split losing only the session cookie) falls
+// back to the connect-time binding cookie rather than refusing outright; a
+// live session that actively disagrees with the binding cookie is still
+// refused, unchanged.
 //
 // Difference from Whoop's callback (§0/AC-WS8/AC-WS10/NFR-105/NFR-109): once
 // tokens are saved, a TRUE FIRST CONNECT (no pre-existing withings_tokens
@@ -90,12 +96,6 @@ export async function GET(request: Request): Promise<Response> {
   cookieStore.delete("withings_oauth_user");
 
   const session = await auth();
-  if (!session) {
-    return Response.json(
-      { error: "no active session — sign in, then restart from /api/withings/connect" },
-      { status: 403 },
-    );
-  }
 
   // Withings reports consent-screen denials etc. as ?error=...
   const oauthError = params.get("error");
@@ -112,7 +112,8 @@ export async function GET(request: Request): Promise<Response> {
     );
   }
 
-  if (!isBoundToInitiatingUser(expectedUserId, session.user.id)) {
+  const identity = resolveCallbackIdentity(session !== null, session?.user.id, expectedUserId);
+  if (identity.outcome === "mismatch") {
     return Response.json(
       {
         error:
@@ -121,9 +122,15 @@ export async function GET(request: Request): Promise<Response> {
       { status: 403 },
     );
   }
+  if (identity.outcome === "unresolved") {
+    return Response.json(
+      { error: "unable to verify this connection — restart from /api/withings/connect" },
+      { status: 403 },
+    );
+  }
 
   const tokens = await exchangeCode(code);
-  const { existingRowFound } = await saveTokens(Number(session.user.id), tokens);
+  const { existingRowFound } = await saveTokens(identity.userId, tokens);
 
   if (isFirstConnect(existingRowFound)) {
     triggerBackfill();
