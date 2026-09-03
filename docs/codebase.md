@@ -281,15 +281,16 @@ not in either checkout, so its ids are read from source, tests and commit subjec
 | `AC-PM` | jerkai | 4 | Preview Migration Gap Fix (`docs/prd/preview-migration-gap-fix.md`; all four ACs are ops/manual checks, not code-tested) |
 | `AC-ST` | jerkai | 4 | Status Sync Times — Local Timezone (`docs/prd/status-sync-local-timezone.md`, PR #31, shipped 2026-08-24) |
 | `AC-FT` | jerkai | 4 | Footer Privacy Policy Link (`docs/prd/footer-privacy-link.md`; `AC-FT3`/`AC-FT4` are regression checks satisfied by existing/full-suite test runs, not new assertions). The NFR-92 no-duplication test checks `href="/privacy"`/`<footer` rather than the PRD §6 text's literal `"Privacy Policy"` substring — a bare substring check would false-positive against `app/privacy/page.tsx`'s own `<h1>Privacy Policy</h1>`, so the as-built check is the correct one. |
-| `AC-WS` | jerkai | 26 | Withings Smart-Scale Integration (`docs/prd/withings-smart-scale-integration.md`, PR #33); AC-WS21–26 added by OAuth Callback Identity Fallback (`docs/prd/oauth-callback-identity-fallback.md`, this slice) |
+| `AC-WS` | jerkai | 31 | Withings Smart-Scale Integration (`docs/prd/withings-smart-scale-integration.md`, PR #33); AC-WS21–26 added by OAuth Callback Identity Fallback (`docs/prd/oauth-callback-identity-fallback.md`, PR #39); AC-WS27–31 added by Withings Backfill Trigger Logging (`docs/prd/withings-backfill-trigger-logging.md`, this slice) |
 | `AC-DR` | jerkai | 9 | Dashboard Multi-Source Metric Resolution & Tagging (`docs/prd/dashboard-multi-source-metric-resolution-and-tagging.md`, PR #34) |
 | `AC-ES` | jerkai | 6 | Resend Sending Domain Switch (`docs/prd/resend-sending-domain-switch.md`, this slice) |
 | `AC-MF` | jerkai-mcp | 9 | MCP metric registry, slice 1 (`AC-MF9`, the vendor drift check) |
 | `AC-DS` | jerkai | 25 | Data Page Redesign & Connect (`docs/prd/data-page-redesign-and-connect.md`); AC-DS22–AC-DS25 added by Rename /data Page to /connect (`docs/prd/rename-data-page-to-connect.md`, this slice) |
 
 **NFR** is one ascending series **per repo**, not per-slice and not global across repos
-(DL-2026-07-31-a). In **jerkai** it is numeric, high-water mark **NFR-140** as of this slice
-(NFR-136–140, OAuth Callback Identity Fallback, `docs/prd/oauth-callback-identity-fallback.md`;
+(DL-2026-07-31-a). In **jerkai** it is numeric, high-water mark **NFR-144** as of this slice
+(NFR-141–144, Withings Backfill Trigger Logging, `docs/prd/withings-backfill-trigger-logging.md`;
+before it, high-water mark was NFR-140, NFR-136–140, OAuth Callback Identity Fallback, `docs/prd/oauth-callback-identity-fallback.md`;
 before it, high-water mark was NFR-135, NFR-131–135, Rename /data Page to /connect, `docs/prd/rename-data-page-to-connect.md`;
 before it, high-water mark was NFR-130, NFR-120–130, Data Page Redesign & Connect,
 `docs/prd/data-page-redesign-and-connect.md`; before that, high-water mark was NFR-119,
