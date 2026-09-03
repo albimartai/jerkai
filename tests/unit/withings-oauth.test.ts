@@ -130,3 +130,145 @@ describe("isFirstConnect — pure first-connect decision, race-free via saveToke
     expect(fakeSql).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * AUTO-GENERATED TEST STUB — JerkAI Contract
+ * PRD Target: JerkAI — Build PRD: Withings Backfill Trigger Logging
+ *
+ * DO NOT EDIT test names, AC IDs, or stub assertions during implementation.
+ * Implementation code must be written to satisfy these stubs.
+ * Editing stubs to fit implementation triggers a blocking finding in jerkai-falsify-diff.
+ */
+// No existing test in this repo mocks or exercises next/server's after() (NFR-141) —
+// this establishes that seam for the first time, running the callback synchronously
+// so the AC-WS28/AC-WS29 fetch-outcome assertions don't need real timers.
+vi.mock("next/server", () => ({ after: (cb: () => void | Promise<void>) => cb() }));
+
+const { triggerBackfill, logBackfillSkipped } = await import("@/lib/withings-oauth");
+
+describe("triggerBackfill / logBackfillSkipped — backfill-trigger logging (AC-WS27–31)", () => {
+  const fetchMock = vi.fn();
+  const cronSecretValue = "test-cron-secret-value";
+  let logSpy: ReturnType<typeof vi.spyOn>;
+  let errorSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    vi.stubEnv("CRON_SECRET", cronSecretValue);
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://jerkai.app");
+    vi.stubEnv("VERCEL_URL", "");
+    vi.stubGlobal("fetch", fetchMock);
+    logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+    fetchMock.mockReset();
+  });
+
+  it("AC-WS27: writes a trigger log identifying the user and the computed start/end window, before the internal fetch is attempted", () => {
+    fetchMock.mockImplementation(() => new Promise(() => {})); // never resolves — isolates this assertion from any outcome log
+    const userId = 90909;
+
+    triggerBackfill(userId);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const requestedUrl = new URL(fetchMock.mock.calls[0][0] as string);
+    const start = requestedUrl.searchParams.get("start");
+    const end = requestedUrl.searchParams.get("end");
+    expect(start).toBeTruthy();
+    expect(end).toBeTruthy();
+
+    expect(logSpy).toHaveBeenCalledTimes(1);
+    const triggerMessage = String(logSpy.mock.calls[0][0]);
+    expect(triggerMessage).toContain(String(userId));
+    // NFR-142: the logged window must be the same start/end values used to build the actual request URL.
+    expect(triggerMessage).toContain(start!);
+    expect(triggerMessage).toContain(end!);
+    // NFR-143: never log the secret.
+    expect(triggerMessage).not.toContain(cronSecretValue);
+
+    // NFR-144: trigger log precedes the fetch attempt.
+    const logOrder = logSpy.mock.invocationCallOrder[0];
+    const fetchOrder = fetchMock.mock.invocationCallOrder[0];
+    expect(logOrder).toBeLessThan(fetchOrder);
+  });
+
+  it("AC-WS28: writes a success log identifying the same user once the internal fetch resolves ok, after the trigger log", async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 200 }));
+    const userId = 51515;
+
+    triggerBackfill(userId);
+    expect(logSpy).toHaveBeenCalledTimes(1); // AC-WS27's trigger line, written synchronously
+    const triggerOrder = logSpy.mock.invocationCallOrder[0];
+
+    await vi.waitFor(() => {
+      expect(logSpy.mock.calls.length).toBeGreaterThan(1);
+    });
+
+    const successCallIndex = logSpy.mock.calls.length - 1;
+    const successMessage = String(logSpy.mock.calls[successCallIndex][0]);
+    expect(successMessage).toContain(String(userId));
+    expect(successMessage).not.toContain(cronSecretValue);
+    // NFR-144: success log follows the trigger log, never precedes or replaces it.
+    expect(logSpy.mock.invocationCallOrder[successCallIndex]).toBeGreaterThan(triggerOrder);
+    expect(errorSpy).not.toHaveBeenCalled();
+  });
+
+  it("AC-WS29: logs the response status and body text when the internal fetch returns a non-2xx response, after the trigger log", async () => {
+    const bodyText = "sync route exploded";
+    fetchMock.mockResolvedValue(new Response(bodyText, { status: 500 }));
+    const userId = 61616;
+
+    triggerBackfill(userId);
+    const triggerOrder = logSpy.mock.invocationCallOrder[0];
+
+    await vi.waitFor(() => {
+      expect(errorSpy).toHaveBeenCalledWith(`withings backfill request failed: 500 ${bodyText}`);
+    });
+
+    expect(errorSpy.mock.invocationCallOrder[0]).toBeGreaterThan(triggerOrder);
+    expect(errorSpy.mock.calls.flat().join(" ")).not.toContain(cronSecretValue);
+  });
+
+  it("AC-WS29: logs the caught error when the internal fetch throws, after the trigger log", async () => {
+    const thrown = new TypeError("network down");
+    fetchMock.mockRejectedValue(thrown);
+    const userId = 61617;
+
+    triggerBackfill(userId);
+    const triggerOrder = logSpy.mock.invocationCallOrder[0];
+
+    await vi.waitFor(() => {
+      expect(errorSpy).toHaveBeenCalledWith("withings backfill request failed:", thrown);
+    });
+
+    expect(errorSpy.mock.invocationCallOrder[0]).toBeGreaterThan(triggerOrder);
+  });
+
+  it("AC-WS30: logs an explicit skip identifying the user when the connect was a reconnect, and triggers no fetch", () => {
+    const userId = 71717;
+
+    logBackfillSkipped(userId);
+
+    // Distinguishes a correctly-skipped reconnect from a first connect whose trigger never fired.
+    expect(fetchMock).not.toHaveBeenCalled();
+    const allCalls = [...logSpy.mock.calls, ...errorSpy.mock.calls];
+    expect(allCalls).toHaveLength(1);
+    expect(String(allCalls[0][0])).toContain(String(userId));
+  });
+
+  it("AC-WS31: CRON_SECRET unset — logs the existing message unchanged and writes no AC-WS27 trigger line", () => {
+    vi.stubEnv("CRON_SECRET", "");
+    const userId = 81818;
+
+    triggerBackfill(userId);
+
+    expect(errorSpy).toHaveBeenCalledTimes(1);
+    expect(errorSpy).toHaveBeenCalledWith("withings backfill not triggered: CRON_SECRET is not set");
+    expect(logSpy).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
