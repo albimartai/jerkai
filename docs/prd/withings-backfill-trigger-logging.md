@@ -70,8 +70,8 @@ All prior NFRs remain in force, including NFR-98/NFR-105/NFR-109 (the backfill-t
 
 ## 6. Definition of Done
 
-* [x] AC-WS27 (bare case — trigger log written before the internal fetch, identifying user and date window) — unit, asserting via `vi.spyOn(console, "log")` (mirroring `lib/alerts.test.ts`/`lib/auth-callbacks.test.ts`'s pattern) that the trigger log fires synchronously before the mocked `fetch`/`after` callback is invoked; plus the manual verification in §5.
-* [x] AC-WS28 (triggered backfill succeeds) — unit, same file/pattern, mocked `fetch` resolving `ok: true`; plus the manual verification in §5.
+* [ ] AC-WS27 (bare case — trigger log written before the internal fetch, identifying user and date window) — unit, asserting via `vi.spyOn(console, "log")` (mirroring `lib/alerts.test.ts`/`lib/auth-callbacks.test.ts`'s pattern) that the trigger log fires synchronously before the mocked `fetch`/`after` callback is invoked; plus the manual verification in §5. Unit half done (12/12 tests pass); manual half NOT yet performed.
+* [ ] AC-WS28 (triggered backfill succeeds) — unit, same file/pattern, mocked `fetch` resolving `ok: true`; plus the manual verification in §5. Unit half done; manual half NOT yet performed.
 * [x] AC-WS29 (triggered backfill fails, both non-2xx and thrown-error shapes) — unit, extending the existing (untested) `console.error` call sites at lines 81/84 with assertions via `vi.spyOn(console, "error")`.
 * [x] AC-WS30 (reconnect explicitly logs a skip) — unit, asserting the skip log fires when `isFirstConnect(existingRowFound)` is false and that no AC-WS27/28/29 log fires in that case.
 * [x] AC-WS31 (CRON_SECRET-missing case unchanged) — unit, asserting the existing line-69 message still fires unchanged and that no AC-WS27 trigger line is written when `CRON_SECRET` is unset.
