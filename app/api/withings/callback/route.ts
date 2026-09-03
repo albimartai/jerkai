@@ -1,11 +1,16 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 
 import { cookies } from "next/headers";
-import { after } from "next/server";
 
 import { auth } from "@/auth";
 import { resolveCallbackIdentity } from "@/lib/withings-oauth-binding";
-import { exchangeCode, isFirstConnect, saveTokens } from "@/lib/withings-oauth";
+import {
+  exchangeCode,
+  isFirstConnect,
+  logBackfillSkipped,
+  saveTokens,
+  triggerBackfill,
+} from "@/lib/withings-oauth";
 
 // Withings' OAuth redirect target. The path is registered VERBATIM as the
 // Redirect URL in the Withings Partner Hub — renaming it breaks the
@@ -29,13 +34,16 @@ import { exchangeCode, isFirstConnect, saveTokens } from "@/lib/withings-oauth";
 // route's own maxDuration budget. A reconnect (row already existed) redirects
 // the same way, with no backfill re-triggered.
 
-// after()'s callback (triggerBackfill, below) awaits the full backfill
-// fetch to /api/withings/sync before this invocation is allowed to end
-// (Vercel's waitUntil keeps it alive that long) — after() runs within THIS
-// route's own duration budget, not the sync route's (per Next's own after()
-// docs). Without matching the sync route's maxDuration here too, a slow
-// first-connect backfill could be killed mid-flight by this route's
-// (shorter) default budget before the awaited fetch ever completes.
+// after()'s callback (triggerBackfill, in lib/withings-oauth.ts, called
+// below) awaits the full backfill fetch to /api/withings/sync before this
+// invocation is allowed to end (Vercel's waitUntil keeps it alive that
+// long) — after() runs within THIS route's own duration budget, not the
+// sync route's (per Next's own after() docs), regardless of which file the
+// call to after() physically lives in — what matters is that it's invoked
+// synchronously within this GET handler's own execution. Without matching
+// the sync route's maxDuration here too, a slow first-connect backfill
+// could be killed mid-flight by this route's (shorter) default budget
+// before the awaited fetch ever completes.
 export const maxDuration = 60;
 
 function matches(a: string, b: string): boolean {
@@ -44,46 +52,6 @@ function matches(a: string, b: string): boolean {
     createHash("sha256").update(a).digest(),
     createHash("sha256").update(b).digest(),
   );
-}
-
-// Targets the deployment that is actually handling this callback
-// (VERCEL_URL — Vercel's own per-deployment hostname, correct for
-// production AND Preview alike), never NEXT_PUBLIC_APP_URL alone: that
-// value is pinned to https://jerkai.app in every environment so Whoop's
-// OAuth redirect_uri byte-matches its Dashboard registration, and reusing it
-// here would misroute a Preview-environment first connect's backfill
-// request to production's /api/withings/sync instead of the deployment that
-// actually holds the new withings_tokens row (§0/NFR-109). Falls back to
-// NEXT_PUBLIC_APP_URL only when VERCEL_URL is unset (local dev).
-function backfillTargetOrigin(): string {
-  const vercelUrl = process.env.VERCEL_URL;
-  if (vercelUrl) return `https://${vercelUrl}`;
-  return (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
-}
-
-const BACKFILL_WINDOW_DAYS = 365;
-
-function triggerBackfill(): void {
-  const cronSecret = process.env.CRON_SECRET;
-  if (!cronSecret) {
-    console.error("withings backfill not triggered: CRON_SECRET is not set");
-    return;
-  }
-  const end = new Date();
-  const start = new Date(end.getTime() - BACKFILL_WINDOW_DAYS * 24 * 3_600_000);
-  const query = `?start=${start.toISOString().slice(0, 10)}&end=${end.toISOString().slice(0, 10)}`;
-  const url = `${backfillTargetOrigin()}/api/withings/sync${query}`;
-
-  after(async () => {
-    try {
-      const res = await fetch(url, { headers: { Authorization: `Bearer ${cronSecret}` } });
-      if (!res.ok) {
-        console.error(`withings backfill request failed: ${res.status} ${await res.text().catch(() => "")}`);
-      }
-    } catch (err) {
-      console.error("withings backfill request failed:", err);
-    }
-  });
 }
 
 export async function GET(request: Request): Promise<Response> {
@@ -133,7 +101,9 @@ export async function GET(request: Request): Promise<Response> {
   const { existingRowFound } = await saveTokens(identity.userId, tokens);
 
   if (isFirstConnect(existingRowFound)) {
-    triggerBackfill();
+    triggerBackfill(identity.userId);
+  } else {
+    logBackfillSkipped(identity.userId);
   }
 
   const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");

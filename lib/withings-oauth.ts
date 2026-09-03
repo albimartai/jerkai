@@ -1,3 +1,5 @@
+import { after } from "next/server";
+
 import { getSql } from "@/lib/db";
 import { decryptToken, encryptToken } from "@/lib/withings-crypto";
 
@@ -165,6 +167,68 @@ export async function saveTokens(
 // without a Route Handler/cookies() context.
 export function isFirstConnect(existingRowFound: boolean): boolean {
   return !existingRowFound;
+}
+
+// Targets the deployment actually handling this callback (VERCEL_URL —
+// Vercel's own per-deployment hostname, correct for production AND Preview
+// alike), never NEXT_PUBLIC_APP_URL alone: that value is pinned to
+// https://jerkai.app in every environment, and reusing it here would
+// misroute a Preview-environment first connect's backfill request to
+// production's /api/withings/sync instead of the deployment that actually
+// holds the new withings_tokens row (§0/NFR-109 of the Withings Smart-Scale
+// Integration PRD). Falls back to NEXT_PUBLIC_APP_URL only when VERCEL_URL
+// is unset (local dev).
+function backfillTargetOrigin(): string {
+  const vercelUrl = process.env.VERCEL_URL;
+  if (vercelUrl) return `https://${vercelUrl}`;
+  return (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
+}
+
+const BACKFILL_WINDOW_DAYS = 365;
+
+// AC-WS27–31 (Withings Backfill Trigger Logging): every state a
+// first-connect-or-reconnect callback can end in gets one distinguishing log
+// line. Extracted out of app/api/withings/callback/route.ts (OQ-2) so it's
+// unit-testable without cookies()/auth() (NFR-141), mirroring
+// isFirstConnect's own extraction rationale above. Called only on a true
+// first connect (isFirstConnect(existingRowFound) true) — the route's own
+// call site gates that.
+export function triggerBackfill(userId: number): void {
+  const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret) {
+    console.error("withings backfill not triggered: CRON_SECRET is not set");
+    return;
+  }
+  const end = new Date();
+  const start = new Date(end.getTime() - BACKFILL_WINDOW_DAYS * 24 * 3_600_000);
+  const startStr = start.toISOString().slice(0, 10);
+  const endStr = end.toISOString().slice(0, 10);
+  const url = `${backfillTargetOrigin()}/api/withings/sync?start=${startStr}&end=${endStr}`;
+
+  // AC-WS27: written before the internal fetch is attempted, and reusing the
+  // exact startStr/endStr the request URL itself uses (NFR-142) rather than
+  // recomputing the window a second time.
+  console.log(`withings backfill triggered for user ${userId}: ${startStr}..${endStr}`);
+
+  after(async () => {
+    try {
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${cronSecret}` } });
+      if (!res.ok) {
+        console.error(`withings backfill request failed: ${res.status} ${await res.text().catch(() => "")}`);
+        return;
+      }
+      console.log(`withings backfill request succeeded for user ${userId}`);
+    } catch (err) {
+      console.error("withings backfill request failed:", err);
+    }
+  });
+}
+
+// AC-WS30: the reconnect branch's explicit counterpart to triggerBackfill —
+// distinguishes a correctly-skipped reconnect from a first connect whose
+// trigger silently failed to fire at all (today, both produce zero output).
+export function logBackfillSkipped(userId: number): void {
+  console.log(`withings backfill skipped for user ${userId}: reconnect`);
 }
 
 type StoredTokens = { accessToken: string; refreshToken: string; expiresAt: Date };
