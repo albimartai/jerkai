@@ -70,17 +70,17 @@ All prior NFRs remain in force, including NFR-98/NFR-105/NFR-109 (the backfill-t
 
 ## 6. Definition of Done
 
-* [ ] AC-WS27 (bare case — trigger log written before the internal fetch, identifying user and date window) — unit, asserting via `vi.spyOn(console, "log")` (mirroring `lib/alerts.test.ts`/`lib/auth-callbacks.test.ts`'s pattern) that the trigger log fires synchronously before the mocked `fetch`/`after` callback is invoked; plus the manual verification in §5.
-* [ ] AC-WS28 (triggered backfill succeeds) — unit, same file/pattern, mocked `fetch` resolving `ok: true`; plus the manual verification in §5.
-* [ ] AC-WS29 (triggered backfill fails, both non-2xx and thrown-error shapes) — unit, extending the existing (untested) `console.error` call sites at lines 81/84 with assertions via `vi.spyOn(console, "error")`.
-* [ ] AC-WS30 (reconnect explicitly logs a skip) — unit, asserting the skip log fires when `isFirstConnect(existingRowFound)` is false and that no AC-WS27/28/29 log fires in that case.
-* [ ] AC-WS31 (CRON_SECRET-missing case unchanged) — unit, asserting the existing line-69 message still fires unchanged and that no AC-WS27 trigger line is written when `CRON_SECRET` is unset.
-* [ ] No schema migration — this slice's PR states this explicitly.
-* [ ] NFR-141 (unit-testable without cookies()/auth()) — covered collectively by AC-WS27–31's tests all running in the `unit` Vitest project (no `cookies()`/`auth()`/database involved).
-* [ ] NFR-142 (logged window matches the actual request window) — covered by AC-WS27's test asserting the logged dates equal the same `start`/`end` values passed into the request URL.
-* [ ] NFR-143 (no token/secret in any log line) — covered by AC-WS27–30's tests asserting exact log content, plus code review confirming no log call references `cronSecret` or an `Authorization` header value.
-* [ ] NFR-144 (trigger-before-outcome ordering) — covered by AC-WS27/AC-WS28/AC-WS29's tests asserting call order via the console/fetch mocks' invocation sequence.
-* [ ] Repo docs updated in the same PR: this PRD landed verbatim at `docs/prd/withings-backfill-trigger-logging.md`; `CLAUDE.md` import added while in flight, dropped per baseline DoD once shipped; `docs/codebase.md`'s AC-WS/NFR high-water notes re-derived and corrected in this same PR to include this slice's own allocation (and to confirm whether OAuth Callback Identity Fallback shipped first as assumed in §4/§5 — renumber here if not).
+* [x] AC-WS27 (bare case — trigger log written before the internal fetch, identifying user and date window) — unit, asserting via `vi.spyOn(console, "log")` (mirroring `lib/alerts.test.ts`/`lib/auth-callbacks.test.ts`'s pattern) that the trigger log fires synchronously before the mocked `fetch`/`after` callback is invoked; plus the manual verification in §5.
+* [x] AC-WS28 (triggered backfill succeeds) — unit, same file/pattern, mocked `fetch` resolving `ok: true`; plus the manual verification in §5.
+* [x] AC-WS29 (triggered backfill fails, both non-2xx and thrown-error shapes) — unit, extending the existing (untested) `console.error` call sites at lines 81/84 with assertions via `vi.spyOn(console, "error")`.
+* [x] AC-WS30 (reconnect explicitly logs a skip) — unit, asserting the skip log fires when `isFirstConnect(existingRowFound)` is false and that no AC-WS27/28/29 log fires in that case.
+* [x] AC-WS31 (CRON_SECRET-missing case unchanged) — unit, asserting the existing line-69 message still fires unchanged and that no AC-WS27 trigger line is written when `CRON_SECRET` is unset.
+* [x] No schema migration — this slice's PR states this explicitly.
+* [x] NFR-141 (unit-testable without cookies()/auth()) — covered collectively by AC-WS27–31's tests all running in the `unit` Vitest project (no `cookies()`/`auth()`/database involved).
+* [x] NFR-142 (logged window matches the actual request window) — covered by AC-WS27's test asserting the logged dates equal the same `start`/`end` values passed into the request URL.
+* [x] NFR-143 (no token/secret in any log line) — covered by AC-WS27–30's tests asserting exact log content, plus code review confirming no log call references `cronSecret` or an `Authorization` header value.
+* [x] NFR-144 (trigger-before-outcome ordering) — covered by AC-WS27/AC-WS28/AC-WS29's tests asserting call order via the console/fetch mocks' invocation sequence.
+* [x] Repo docs updated in the same PR: this PRD landed verbatim at `docs/prd/withings-backfill-trigger-logging.md`; `CLAUDE.md` import added while in flight, dropped per baseline DoD once shipped; `docs/codebase.md`'s AC-WS/NFR high-water notes re-derived and corrected in this same PR to include this slice's own allocation (and to confirm whether OAuth Callback Identity Fallback shipped first as assumed in §4/§5 — renumber here if not).
 * [x] Decision logged: this slice's own scoping decision (§0 — Withings-only, additive-logging-only, its own standalone PRD rather than folded into either sibling), confirmed by Albert 2026-09-01, logged as DL-2026-09-01-b.
 * [ ] Product-truth reconciliation flagged in the PR summary per the baseline DoD — this slice is pure observability with no behavior change, arguably not product-relevant; note it for Albert's judgment rather than assuming either way.
 
