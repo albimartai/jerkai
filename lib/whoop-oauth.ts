@@ -1,3 +1,5 @@
+import { after } from "next/server";
+
 import { getSql } from "@/lib/db";
 import { decryptToken, encryptToken } from "@/lib/whoop-crypto";
 
@@ -117,10 +119,19 @@ export async function refreshTokens(refreshToken: string): Promise<WhoopTokenRes
 // whoop_tokens is keyed by user_id (Whoop Multi-Tenancy, AC-WT2/AC-WT5) — a
 // Whoop connection is one-per-user, so user_id is the table's primary key
 // itself, not a surrogate id alongside it.
-export async function saveTokens(userId: number, tokens: WhoopTokenResponse): Promise<void> {
+//
+// A single atomic `insert ... on conflict (user_id) do update ... returning
+// (xmax = 0) as inserted`, not a separate SELECT-then-upsert (NFR-145,
+// mirroring lib/withings-oauth.ts's NFR-98 precedent exactly) — race-free by
+// construction, so a concurrent double-submit of the connect flow can never
+// both observe "first connect" and double-trigger the backfill.
+export async function saveTokens(
+  userId: number,
+  tokens: WhoopTokenResponse,
+): Promise<{ existingRowFound: boolean }> {
   const sql = getSql();
   const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
-  await sql`
+  const rows = await sql`
     insert into whoop_tokens (user_id, access_token_enc, refresh_token_enc, expires_at, scope, updated_at)
     values (${userId}, ${encryptToken(tokens.access_token)}, ${encryptToken(tokens.refresh_token)},
             ${expiresAt}, ${tokens.scope ?? null}, now())
@@ -130,7 +141,74 @@ export async function saveTokens(userId: number, tokens: WhoopTokenResponse): Pr
                   expires_at = excluded.expires_at,
                   scope = excluded.scope,
                   updated_at = now()
+    returning (xmax = 0) as inserted
   `;
+  const inserted = Boolean(rows[0]?.inserted);
+  return { existingRowFound: !inserted };
+}
+
+// Pure decision function (§1, mirroring lib/withings-oauth.ts's isFirstConnect
+// exactly): true only when saveTokens' atomic insert reports no pre-existing
+// row — i.e. a genuine first connect. Takes the already-resolved boolean
+// rather than re-querying, so the callback route's first-connect-vs-reconnect
+// branch (AC-WT20/AC-WT21) is unit-testable without a Route Handler/cookies()
+// context.
+export function isFirstConnect(existingRowFound: boolean): boolean {
+  return !existingRowFound;
+}
+
+// Targets the deployment actually handling this callback (VERCEL_URL —
+// Vercel's own per-deployment hostname, correct for production AND Preview
+// alike), never NEXT_PUBLIC_APP_URL alone: that value is pinned to
+// https://jerkai.app in every environment, and reusing it here would misroute
+// a Preview-environment first connect's backfill request to production's
+// /api/whoop/sync instead of the deployment that actually holds the new
+// whoop_tokens row (NFR-146, mirroring lib/withings-oauth.ts's
+// backfillTargetOrigin exactly). Falls back to NEXT_PUBLIC_APP_URL only when
+// VERCEL_URL is unset (local dev).
+function backfillTargetOrigin(): string {
+  const vercelUrl = process.env.VERCEL_URL;
+  if (vercelUrl) return `https://${vercelUrl}`;
+  return (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
+}
+
+// §0/NFR-147: 90 days, not Withings' 365 — JerkAI's own dashboard never reads
+// more than 90 days of history regardless (app/weekly/page.tsx,
+// app/daily/page.tsx), and app/api/whoop/sync/route.ts's own header comment
+// already treats ~90 days as the safe chunk size for a single Whoop
+// historical pull, so this needs no further internal chunking.
+const BACKFILL_WINDOW_DAYS = 90;
+
+// Fires the internal, wide-window sync call after the callback's own
+// response is sent (NFR-149's maxDuration budget covers this route, not the
+// sync route's) — mirroring lib/withings-oauth.ts's triggerBackfill exactly,
+// including its console.error fallback when CRON_SECRET is unset. Unlike
+// Withings' own triggerBackfill, this carries no four-state
+// (triggered/succeeded/failed/skipped) logging — that pattern is Withings'
+// own AC-WS27–31, out of scope for this slice (§1, §8 OQ-4).
+export function triggerBackfill(userId: number): void {
+  const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret) {
+    console.error("whoop backfill not triggered: CRON_SECRET is not set");
+    return;
+  }
+  const end = new Date();
+  const start = new Date(end.getTime() - BACKFILL_WINDOW_DAYS * 24 * 3_600_000);
+  const startStr = start.toISOString().slice(0, 10);
+  const endStr = end.toISOString().slice(0, 10);
+  const url = `${backfillTargetOrigin()}/api/whoop/sync?start=${startStr}&end=${endStr}`;
+
+  after(async () => {
+    try {
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${cronSecret}` } });
+      if (!res.ok) {
+        console.error(`whoop backfill request failed: ${res.status} ${await res.text().catch(() => "")}`);
+        return;
+      }
+    } catch (err) {
+      console.error("whoop backfill request failed:", err);
+    }
+  });
 }
 
 type StoredTokens = { accessToken: string; refreshToken: string; expiresAt: Date };
