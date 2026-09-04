@@ -21,13 +21,19 @@ const fakeSql = vi.fn(async (strings: TemplateStringsArray, ...values: unknown[]
       unknown,
       unknown,
     ];
+    // Mirrors tests/unit/withings-oauth.test.ts:31-47's `inserted` flag so
+    // saveTokens' prospective `RETURNING (xmax = 0) as inserted` clause has
+    // something real to resolve against — without this, existingRowFound
+    // would report `true` unconditionally regardless of whether the row
+    // pre-existed (jerkai-falsify-prd round 3, [A/E, FM-02/FM-01]).
+    const inserted = !tokenRows.has(userId);
     tokenRows.set(userId, {
       access_token_enc: accessTokenEnc,
       refresh_token_enc: refreshTokenEnc,
       expires_at: expiresAt,
       scope,
     });
-    return [];
+    return [{ inserted }];
   }
   throw new Error(`fake sql got an unexpected statement: ${text}`);
 });
@@ -37,6 +43,7 @@ const {
   buildAuthorizeUrl,
   exchangeCode,
   getFreshAccessToken,
+  isFirstConnect,
   refreshTokens,
   saveTokens,
   WHOOP_TOKEN_URL,
@@ -233,5 +240,116 @@ describe("saveTokens + getFreshAccessToken — per-user (AC-WT5, AC-WT6)", () =>
 
     expect(await getFreshAccessToken(unconnectedUserId)).toBeNull();
     expect(await getFreshAccessToken(connectedUserId)).toBe("connected-access");
+  });
+});
+
+/**
+ * AUTO-GENERATED TEST STUB — JerkAI Contract
+ * PRD Target: JerkAI — Build PRD: Whoop Historical Backfill on First Connect
+ *
+ * DO NOT EDIT test names, AC IDs, or stub assertions during implementation.
+ * Implementation code must be written to satisfy these stubs.
+ * Editing stubs to fit implementation triggers a blocking finding in jerkai-falsify-diff.
+ */
+describe("isFirstConnect — pure first-connect decision, race-free via saveTokens' atomic insert (AC-WT20a, AC-WT21, NFR-145, NFR-148)", () => {
+  it("AC-WT20a: isFirstConnect derives true from saveTokens' result on a true first connect (no pre-existing whoop_tokens row)", async () => {
+    const result = await saveTokens(7001, {
+      access_token: "a1",
+      refresh_token: "r1",
+      expires_in: 3600,
+    });
+    expect(isFirstConnect(result.existingRowFound)).toBe(true);
+  });
+
+  it("AC-WT21/NFR-148: isFirstConnect derives false from saveTokens' result on a reconnect (a pre-existing row was found), so a reconnect never re-triggers the 90-day backfill", async () => {
+    const userId = 7002;
+    await saveTokens(userId, { access_token: "a1", refresh_token: "r1", expires_in: 3600 });
+    const reconnect = await saveTokens(userId, {
+      access_token: "a2",
+      refresh_token: "r2",
+      expires_in: 3600,
+    });
+    expect(isFirstConnect(reconnect.existingRowFound)).toBe(false);
+  });
+
+  it("AC-WT20a/AC-WT21: isFirstConnect is a pure function of the boolean alone — it never re-queries the database itself", () => {
+    fakeSql.mockClear();
+    expect(isFirstConnect(false)).toBe(true);
+    expect(isFirstConnect(true)).toBe(false);
+    expect(fakeSql).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * AUTO-GENERATED TEST STUB — JerkAI Contract
+ * PRD Target: JerkAI — Build PRD: Whoop Historical Backfill on First Connect
+ *
+ * DO NOT EDIT test names, AC IDs, or stub assertions during implementation.
+ * Implementation code must be written to satisfy these stubs.
+ * Editing stubs to fit implementation triggers a blocking finding in jerkai-falsify-diff.
+ */
+// No existing test in this file mocks or exercises next/server's after() —
+// this establishes that seam for Whoop's own triggerBackfill(), mirroring
+// tests/unit/withings-oauth.test.ts's AC-WS27 test shape only (§1): the
+// four-state trigger/success/failure/skip logging assertions are NOT
+// mirrored here — Whoop's triggerBackfill() carries no such logging in this
+// slice (§1, §8 OQ-4).
+vi.mock("next/server", () => ({ after: (cb: () => void | Promise<void>) => cb() }));
+
+const { triggerBackfill } = await import("@/lib/whoop-oauth");
+
+describe("triggerBackfill / backfillTargetOrigin — AC-WT20d", () => {
+  const backfillFetchMock = vi.fn();
+
+  beforeEach(() => {
+    vi.stubEnv("CRON_SECRET", "test-cron-secret-value");
+    vi.stubEnv("VERCEL_URL", "");
+    vi.stubGlobal("fetch", backfillFetchMock);
+  });
+
+  afterEach(() => {
+    backfillFetchMock.mockReset();
+  });
+
+  it("AC-WT20d: makes exactly one internal fetch call, targeting VERCEL_URL's own deployment origin, never NEXT_PUBLIC_APP_URL alone (NFR-146)", () => {
+    vi.stubEnv("VERCEL_URL", "my-preview-deployment.vercel.app");
+    backfillFetchMock.mockImplementation(() => new Promise(() => {}));
+
+    triggerBackfill(9001);
+
+    expect(backfillFetchMock).toHaveBeenCalledTimes(1);
+    const requestedUrl = new URL(backfillFetchMock.mock.calls[0][0] as string);
+    expect(requestedUrl.origin).toBe("https://my-preview-deployment.vercel.app");
+    expect(requestedUrl.pathname).toBe("/api/whoop/sync");
+  });
+
+  it("AC-WT20d/NFR-146: falls back to NEXT_PUBLIC_APP_URL only when VERCEL_URL is unset", () => {
+    vi.stubEnv("VERCEL_URL", "");
+    backfillFetchMock.mockImplementation(() => new Promise(() => {}));
+
+    triggerBackfill(9002);
+
+    const requestedUrl = new URL(backfillFetchMock.mock.calls[0][0] as string);
+    expect(requestedUrl.origin).toBe("https://jerkai.app");
+  });
+
+  it("AC-WT20d/NFR-147: the ?start=&end= window spans exactly BACKFILL_WINDOW_DAYS = 90 days ending today, needing no further chunking", () => {
+    backfillFetchMock.mockImplementation(() => new Promise(() => {}));
+
+    triggerBackfill(9003);
+
+    const requestedUrl = new URL(backfillFetchMock.mock.calls[0][0] as string);
+    const start = requestedUrl.searchParams.get("start");
+    const end = requestedUrl.searchParams.get("end");
+    expect(start).toBeTruthy();
+    expect(end).toBeTruthy();
+
+    const spanDays = Math.round(
+      (new Date(end!).getTime() - new Date(start!).getTime()) / (24 * 3_600_000),
+    );
+    expect(spanDays).toBe(90);
+
+    const today = new Date().toISOString().slice(0, 10);
+    expect(end!.slice(0, 10)).toBe(today);
   });
 });
