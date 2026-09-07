@@ -74,8 +74,15 @@ function resolveWindow(params: URLSearchParams): { start: string; end: string } 
   const end = endParam
     ? new Date(`${endParam}T23:59:59.999Z`)
     : new Date();
+  // Anchored at end-of-day, matching `end` above, not start-of-day: an
+  // explicit ?start=&end= pair N calendar days apart must produce a span of
+  // exactly N days (AC-WT20b/NFR-147), not N+1 — start-of-day would leave
+  // the asymmetric ~1 extra day that end-of-day-for-end alone introduces.
+  // Sacrifices only the oldest boundary day's own data (negligible at the
+  // historical edge of a 90-day pull) rather than all of the newest day's,
+  // which start-of-day-for-both would have done instead.
   const start = startParam
-    ? new Date(`${startParam}T00:00:00.000Z`)
+    ? new Date(`${startParam}T23:59:59.999Z`)
     : new Date(end.getTime() - DEFAULT_WINDOW_DAYS * 24 * 3_600_000);
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start >= end) return null;
   return { start: start.toISOString(), end: end.toISOString() };
