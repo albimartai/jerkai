@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 
 import { auth } from "@/auth";
 import { resolveCallbackIdentity } from "@/lib/whoop-oauth-binding";
-import { exchangeCode, saveTokens } from "@/lib/whoop-oauth";
+import { exchangeCode, isFirstConnect, saveTokens, triggerBackfill } from "@/lib/whoop-oauth";
 
 // Whoop's OAuth redirect target. The path is registered VERBATIM as the
 // Redirect URL in the Whoop Developer Dashboard
@@ -28,6 +28,17 @@ import { exchangeCode, saveTokens } from "@/lib/whoop-oauth";
 //     binding cookie rather than refusing outright; a live session that
 //     actively disagrees with the binding cookie is still refused,
 //     unchanged.
+//   - a true first connect (no pre-existing whoop_tokens row) triggers a
+//     one-time 90-day historical backfill after the redirect (AC-WT20,
+//     NFR-145/148, JerkAI - Build PRD - Whoop Historical Backfill on First
+//     Connect, §0) — mirroring app/api/withings/callback/route.ts's own
+//     triggerBackfill()/isFirstConnect() call shape.
+
+// NFR-149: matches app/api/whoop/sync/route.ts's own declared budget — the
+// after()-scheduled backfill fetch runs inside this route's own duration
+// budget, not the sync route's, so it must not be killed by a shorter
+// unbudgeted default before the awaited internal fetch completes.
+export const maxDuration = 60;
 
 function matches(a: string, b: string): boolean {
   // Hash both sides so timingSafeEqual gets equal-length buffers.
@@ -84,7 +95,10 @@ export async function GET(request: Request): Promise<Response> {
   }
 
   const tokens = await exchangeCode(code);
-  await saveTokens(identity.userId, tokens);
+  const { existingRowFound } = await saveTokens(identity.userId, tokens);
+  if (isFirstConnect(existingRowFound)) {
+    triggerBackfill(identity.userId);
+  }
 
   const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
   return Response.redirect(`${appUrl}/status`, 302);

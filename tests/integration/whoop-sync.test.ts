@@ -541,3 +541,63 @@ describe("GET /api/whoop/sync — AC-WT9: failure alert names the affected user"
     );
   });
 });
+
+/**
+ * AUTO-GENERATED TEST STUB — JerkAI Contract
+ * PRD Target: JerkAI — Build PRD: Whoop Historical Backfill on First Connect
+ *
+ * DO NOT EDIT test names, AC IDs, or stub assertions during implementation.
+ * Implementation code must be written to satisfy these stubs.
+ * Editing stubs to fit implementation triggers a blocking finding in jerkai-falsify-diff.
+ */
+describe("GET /api/whoop/sync — AC-WT20b: a 90-day backfill window override lands rows across the full requested span", () => {
+  it("AC-WT20b: a ?start=<90d ago>&end=<today> override reaches Whoop's API as the full 90-day window (not the route's default 7-day trailing window), and rows land in biometric_readings/whoop_workouts", async () => {
+    const end = new Date();
+    const start = new Date(end.getTime() - 90 * 24 * 3_600_000);
+    const startParam = start.toISOString().slice(0, 10);
+    const endParam = end.toISOString().slice(0, 10);
+
+    const requestedWindows: { start: string; end: string }[] = [];
+    stubWhoopHost((url) => {
+      requestedWindows.push({
+        start: url.searchParams.get("start") ?? "",
+        end: url.searchParams.get("end") ?? "",
+      });
+      const records = url.pathname.endsWith("/cycle")
+        ? [CYCLE]
+        : url.pathname.endsWith("/activity/workout")
+          ? [WORKOUT]
+          : [];
+      return new Response(JSON.stringify({ records, next_token: null }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+
+    const res = await GET(syncRequest(AUTH, `?start=${startParam}&end=${endParam}`));
+    const body = await res.json();
+    expect(res.status).toBe(200);
+    expect(body.status).toBe("success");
+
+    // Every Whoop collection call carried the full 90-day-wide window, not
+    // the route's default 7-day trailing one (§0/NFR-147: a single call,
+    // no further chunking needed at 90 days).
+    expect(requestedWindows.length).toBeGreaterThan(0);
+    for (const window of requestedWindows) {
+      const requestedStart = new Date(window.start);
+      const requestedEnd = new Date(window.end);
+      const spanDays = Math.round(
+        (requestedEnd.getTime() - requestedStart.getTime()) / (24 * 3_600_000),
+      );
+      expect(spanDays).toBe(90);
+    }
+
+    const rows = await sql`
+      select source, metric from biometric_readings where metric = 'day_strain'
+    `;
+    expect(rows).toEqual([{ source: "whoop", metric: "day_strain" }]);
+
+    const workouts = await sql`select id from whoop_workouts`;
+    expect(workouts).toEqual([{ id: WORKOUT.id }]);
+  });
+});

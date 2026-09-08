@@ -45,7 +45,7 @@ means a colocated `lib/**/*.test.ts`; tests living under `tests/` are named inst
 | `health-export.ts` | Health Auto Export payload → readings: `mapHealthExportPayload`, `extractReadingDate`, `mergeDailyPoints`, `METRIC_MAP` | yes | `sources` | yes |
 | `whoop-api.ts` | Whoop v2 client: `fetchCollection` (paginates, one 429 retry), `fetchSleepById`, `WhoopApiError` | no | — | none |
 | `whoop-crypto.ts` | `encryptToken`/`decryptToken`, AES-256-GCM, `v1.<iv>.<tag>.<ct>` | no | — | `tests/unit/whoop-crypto.test.ts` |
-| `whoop-oauth.ts` | OAuth flow + token persistence; `getFreshAccessToken` refreshes within 60s of expiry | no | `db`, `whoop-crypto` | `tests/unit/whoop-oauth.test.ts` |
+| `whoop-oauth.ts` | OAuth flow + token persistence; `getFreshAccessToken` refreshes within 60s of expiry; `saveTokens` returns `{ existingRowFound }` via atomic `RETURNING (xmax = 0) as inserted`; `isFirstConnect`, `triggerBackfill` (90-day `after()`-scheduled first-connect backfill, `BACKFILL_WINDOW_DAYS`), private `backfillTargetOrigin` added by Whoop Historical Backfill on First Connect (`docs/prd/whoop-historical-backfill-on-first-connect.md`, this slice) | no | `db`, `whoop-crypto`, `next/server` (`after`) | `tests/unit/whoop-oauth.test.ts` |
 | `whoop-map.ts` | Whoop records → readings/workout rows: `mapWhoopData`, `mapWhoopWorkouts`, `localDay` | yes | `whoop-api` (types) | yes |
 | `auth-callbacks.ts` | `authorized` (drives `proxy.ts`), `signIn` (multi-email allowlist via `ALLOWLISTED_EMAILS`, fails closed) | no | — | yes |
 | `targets.ts` | `saveTarget`, `fetchTargets`; re-exports `resolveTargetForDate` | no | `db`, `target-resolution` | yes |
@@ -92,7 +92,7 @@ means a colocated `lib/**/*.test.ts`; tests living under `tests/` are named inst
 | `ui/log-meal-panel.tsx`, `ui/meal-entries-list.tsx`, `ui/targets-form.tsx` | Client components driving the Server Actions via `useActionState` |
 | `api/ingest/health/route.ts` | `POST`; `x-api-key` compared with hashed `timingSafeEqual` |
 | `api/whoop/sync/route.ts` | `GET`; Vercel Cron target, `CRON_SECRET` bearer, `maxDuration = 60` |
-| `api/whoop/connect` / `callback` | OAuth start (stays session-gated) and redirect target (state-cookie gated) |
+| `api/whoop/connect` / `callback` | OAuth start (stays session-gated) and redirect target (state-cookie gated); `callback` declares `maxDuration = 60` and fires `triggerBackfill()` on a true first connect (`isFirstConnect`, Whoop Historical Backfill on First Connect, this slice) |
 | `api/auth/[...nextauth]/route.ts` | Re-exports Auth.js `handlers` |
 
 ## 4. The read and write paths
@@ -276,7 +276,7 @@ not in either checkout, so its ids are read from source, tests and commit subjec
 | `AC-AB` | jerkai | 9 | Demo About |
 | `AC-AU` | jerkai | 7 | Extend Sign-In Allowlist (`docs/prd/extend-signin-allowlist.md`) |
 | `AC-MU` | jerkai | 12 | Multi-User Data Model Retrofit (`docs/prd/multi-user-data-model-retrofit.md`) |
-| `AC-WT` | jerkai | 19 | Whoop Multi-Tenancy; AC-WT14–19 added by OAuth Callback Identity Fallback (`docs/prd/oauth-callback-identity-fallback.md`, this slice) |
+| `AC-WT` | jerkai | 22 | Whoop Multi-Tenancy; AC-WT14–19 added by OAuth Callback Identity Fallback (`docs/prd/oauth-callback-identity-fallback.md`); AC-WT20–22 added by Whoop Historical Backfill on First Connect (`docs/prd/whoop-historical-backfill-on-first-connect.md`, this slice) |
 | `AC-PUE` | jerkai | 4 | Primary User Email Alert Gap (`AC-PUE4` is an ops/manual check, not code-tested) |
 | `AC-PM` | jerkai | 4 | Preview Migration Gap Fix (`docs/prd/preview-migration-gap-fix.md`; all four ACs are ops/manual checks, not code-tested) |
 | `AC-ST` | jerkai | 4 | Status Sync Times — Local Timezone (`docs/prd/status-sync-local-timezone.md`, PR #31, shipped 2026-08-24) |
@@ -288,8 +288,9 @@ not in either checkout, so its ids are read from source, tests and commit subjec
 | `AC-DS` | jerkai | 25 | Data Page Redesign & Connect (`docs/prd/data-page-redesign-and-connect.md`); AC-DS22–AC-DS25 added by Rename /data Page to /connect (`docs/prd/rename-data-page-to-connect.md`, this slice) |
 
 **NFR** is one ascending series **per repo**, not per-slice and not global across repos
-(DL-2026-07-31-a). In **jerkai** it is numeric, high-water mark **NFR-144** as of this slice
-(NFR-141–144, Withings Backfill Trigger Logging, `docs/prd/withings-backfill-trigger-logging.md`;
+(DL-2026-07-31-a). In **jerkai** it is numeric, high-water mark **NFR-149** as of this slice
+(NFR-145–149, Whoop Historical Backfill on First Connect, `docs/prd/whoop-historical-backfill-on-first-connect.md`;
+before it, high-water mark was NFR-144, NFR-141–144, Withings Backfill Trigger Logging, `docs/prd/withings-backfill-trigger-logging.md`;
 before it, high-water mark was NFR-140, NFR-136–140, OAuth Callback Identity Fallback, `docs/prd/oauth-callback-identity-fallback.md`;
 before it, high-water mark was NFR-135, NFR-131–135, Rename /data Page to /connect, `docs/prd/rename-data-page-to-connect.md`;
 before it, high-water mark was NFR-130, NFR-120–130, Data Page Redesign & Connect,
