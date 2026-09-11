@@ -13,11 +13,10 @@ export const dynamic = "force-dynamic";
 // shape (NFR-25): ≈ 13 completed weeks (AC-W5) plus the in-progress week.
 export const WEEKLY_LEDGER_WINDOW_DAYS = 90;
 
-export default async function Weekly() {
+export default async function Results() {
   // proxy.ts already gates this route; re-checking here keeps real
   // biometric data behind a session even if the proxy matcher ever
-  // regresses (same defense-in-depth as app/daily/page.tsx and
-  // app/status/page.tsx).
+  // regresses (same defense-in-depth as app/daily/page.tsx).
   const session = await auth();
   if (!session) {
     redirect("/signin");

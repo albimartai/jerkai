@@ -58,7 +58,7 @@ export default function DemoAbout() {
           <p>Two screens do that work:</p>
           <ul className="flex list-disc flex-col gap-2 pl-5">
             <li>
-              <strong className="font-semibold text-zinc-900 dark:text-zinc-100">Weekly</strong>: one
+              <strong className="font-semibold text-zinc-900 dark:text-zinc-100">Results</strong>: one
               row per week, five columns. How did my weeks go, in one scan.
             </li>
             <li>

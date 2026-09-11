@@ -12,7 +12,7 @@ import type { NextConfig } from "next";
 // rewrite here for this host — it would be dead code at best and a second
 // place for the same ordering bug to recur at worst. Internal links inside
 // the demo tree always point at the canonical /demo/* paths (see
-// app/ui/nav-header.tsx, app/ui/weekly-ledger.tsx), so jerkai.app/demo/weekly
+// app/ui/nav-header.tsx, app/ui/weekly-ledger.tsx), so jerkai.app/demo/results
 // also works directly without any host-based routing at all.
 const nextConfig: NextConfig = {
   /* config options here */

@@ -29,12 +29,12 @@ deliberately outside the driver tree (DL-2026-08-03-a1):
   Whoop detail.
 
 ## Surfaces & routes (Weekly Ledger, DL-2026-07-19-a)
-Two resolutions, one nav: **`/weekly`** (the Weekly Ledger) is the default landing page —
+Two resolutions, one nav: **`/results`** (the Weekly Ledger) is the default landing page —
 one row per ISO week (Mon–Sun), five columns of deltas/states, newest week first, capped at
 13 completed weeks plus the current in-progress week. It answers "how did my weeks go?" in
 one scan. **`/daily`** is the strip stack (below) — the drill-down surface opened from a
 ledger row, or directly for day-level co-movement investigation. Every page header carries
-Weekly/Daily nav plus Connect (renamed from Data, `docs/prd/rename-data-page-to-connect.md`,
+Results/Daily nav plus Connect (renamed from Data, `docs/prd/rename-data-page-to-connect.md`,
 this slice; the link-opens-the-page behavior itself is unaffected, AC-D15).
 
 The hero stall badge is computed from completed Weekly Ledger rows, not daily streaks

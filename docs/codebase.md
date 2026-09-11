@@ -7,7 +7,7 @@ cite a fact instead of re-deriving it. It covers modules, data flow, conventions
 It deliberately does not cover product intent (`docs/context.md`), schema DDL or local setup
 (`README.md`), or process (`docs/definition-of-ready-and-done.md`).
 
-**Derived at:** commit `517fe5d` (branch `feat/connect-page-rename`, pre-merge), 2026-08-31.
+**Derived at:** commit `9eb78d2` (branch `feat/results-page-rename`, pre-merge), 2026-09-11.
 
 **Staleness rule.** This is a snapshot of a moving target. A PRD citing it must re-verify
 the specific claims it leans on. Where a claim disagrees with the code, **the file is wrong
@@ -127,11 +127,11 @@ row's unit per metric. With no rows it returns an empty axis and `latestDay: nul
 whatever `resolvedScaleSource` the resolution step found — the two are computed independently
 and either can be null/empty regardless of the other).
 
-**Render.** `/` and `/weekly` → `fetchDashboardData(90, userId)` → `buildWeeklyView` → `WeeklyLedger`.
+**Render.** `/` and `/results` → `fetchDashboardData(90, userId)` → `buildWeeklyView` → `WeeklyLedger`.
 `/daily` → `fetchDashboardData(90, userId)` plus the sibling `fetchTargets()` +
 `fetchCalorieSeries(axis, targets)` → `Dashboard`. The 30/90 toggle and the hover crosshair
 re-render client-side from data already held — no second fetch. All six gated pages (`/`,
-`/daily`, `/weekly`, `/log-meal`, `/settings/targets`, `/connect`) are
+`/daily`, `/results`, `/log-meal`, `/settings/targets`, `/connect`) are
 `export const dynamic = "force-dynamic"` and re-check `auth()` themselves. (`/status` and
 `/data` are now both plain `redirect("/connect")` stubs — no data fetch, no auth re-check of
 their own, `docs/prd/rename-data-page-to-connect.md` AC-DS23/AC-DS24, amending AC-DS2 from
@@ -191,7 +191,7 @@ depends on `app/`. *Reality:* it imports `todayLocal` from `app/ui/log-meal-form
 `"use client"` module — the only lib→app edge in the repo. *Consequence:* the module is not
 liftable, and the direction of that dependency will surprise anyone reading the graph
 top-down. `app/page.tsx` likewise imports `WEEKLY_LEDGER_WINDOW_DAYS` from
-`app/weekly/page.tsx`, a page-to-page value import.
+`app/results/page.tsx`, a page-to-page value import.
 
 **`stallBadge`'s streak counts present points, not calendar days.** *Assumption:*
 "non-increasing for 10 consecutive days" means 10 calendar days. *Reality:* it filters nulls
@@ -270,7 +270,7 @@ not in either checkout, so its ids are read from source, tests and commit subjec
 |---|---|---|---|
 | `AC-D` | jerkai | 21 | v1 dashboard (`docs/prd/archive/v1-dashboard.md`; carried forward unchanged by v1.1; AC-D18–AC-D21 added by Nav Header Cleanup & Status Page Chrome) |
 | `AC-N` | jerkai | 14 | v1.1 dashboard |
-| `AC-W` | jerkai | 15 | Weekly Ledger (`docs/prd/archive/weekly-ledger.md`; AC-W13–AC-W15 added by Weekly Ledger Week Column Wrap, `docs/prd/weekly-ledger-week-column-wrap.md`) |
+| `AC-W` | jerkai | 22 | Weekly Ledger (`docs/prd/archive/weekly-ledger.md`; AC-W13–AC-W15 added by Weekly Ledger Week Column Wrap, `docs/prd/weekly-ledger-week-column-wrap.md`); AC-W16–AC-W22 added by Rename Weekly Page to Results (`docs/prd/rename-weekly-page-to-results.md`, this slice) |
 | `AC-M` | jerkai | 35 | Log Meal and its fast-follows |
 | `AC-PD` | jerkai | 7 | Public Demo |
 | `AC-AB` | jerkai | 9 | Demo About |
@@ -288,8 +288,9 @@ not in either checkout, so its ids are read from source, tests and commit subjec
 | `AC-DS` | jerkai | 25 | Data Page Redesign & Connect (`docs/prd/data-page-redesign-and-connect.md`); AC-DS22–AC-DS25 added by Rename /data Page to /connect (`docs/prd/rename-data-page-to-connect.md`, this slice) |
 
 **NFR** is one ascending series **per repo**, not per-slice and not global across repos
-(DL-2026-07-31-a). In **jerkai** it is numeric, high-water mark **NFR-149** as of this slice
-(NFR-145–149, Whoop Historical Backfill on First Connect, `docs/prd/whoop-historical-backfill-on-first-connect.md`;
+(DL-2026-07-31-a). In **jerkai** it is numeric, high-water mark **NFR-154** as of this slice
+(NFR-150–154, Rename Weekly Page to Results, `docs/prd/rename-weekly-page-to-results.md`;
+before it, high-water mark was NFR-149, NFR-145–149, Whoop Historical Backfill on First Connect, `docs/prd/whoop-historical-backfill-on-first-connect.md`;
 before it, high-water mark was NFR-144, NFR-141–144, Withings Backfill Trigger Logging, `docs/prd/withings-backfill-trigger-logging.md`;
 before it, high-water mark was NFR-140, NFR-136–140, OAuth Callback Identity Fallback, `docs/prd/oauth-callback-identity-fallback.md`;
 before it, high-water mark was NFR-135, NFR-131–135, Rename /data Page to /connect, `docs/prd/rename-data-page-to-connect.md`;

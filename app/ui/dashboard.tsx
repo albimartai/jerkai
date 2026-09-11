@@ -427,7 +427,7 @@ export default function Dashboard({
   // of trailing at the latest day.
   focusWeekStart?: string;
   // "demo" (docs/prd/public-demo.md, AC-PD4) hides Targets/Log meal/Status
-  // from the shared header and points Weekly/Daily at /demo/*. Default "live"
+  // from the shared header and points Results/Daily at /demo/*. Default "live"
   // is today's unchanged behavior.
   navVariant?: "live" | "demo";
 }) {

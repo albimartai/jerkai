@@ -3,7 +3,7 @@ import { addDays } from "@/lib/dashboard/series";
 import type { LedgerConfig, RecoveryConfig } from "@/lib/dashboard/config";
 
 // Weekly Ledger (NFR-21): pure functions over daily series + config, no DB,
-// no rendering. The `/weekly` page and the hero badge (weekly-badge.ts) are
+// no rendering. The `/results` page and the hero badge (weekly-badge.ts) are
 // both thin consumers of buildWeeklyLedger's output, so they can never
 // disagree about what a week's body-fat state was (AC-W12).
 //

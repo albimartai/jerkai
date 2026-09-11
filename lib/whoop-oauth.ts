@@ -173,7 +173,7 @@ function backfillTargetOrigin(): string {
 }
 
 // §0/NFR-147: 90 days, not Withings' 365 — JerkAI's own dashboard never reads
-// more than 90 days of history regardless (app/weekly/page.tsx,
+// more than 90 days of history regardless (app/results/page.tsx,
 // app/daily/page.tsx), and app/api/whoop/sync/route.ts's own header comment
 // already treats ~90 days as the safe chunk size for a single Whoop
 // historical pull, so this needs no further internal chunking.

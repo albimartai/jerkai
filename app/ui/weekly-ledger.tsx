@@ -128,7 +128,7 @@ export default function WeeklyLedger({
 }) {
   return (
     <main className="mx-auto w-full max-w-3xl overflow-x-hidden px-4 pb-10 font-sans">
-      <NavHeader active="weekly" variant={navVariant} />
+      <NavHeader active="results" variant={navVariant} />
 
       {rows.length === 0 ? (
         <p className="py-24 text-center text-2xl text-zinc-500">No readings yet.</p>
