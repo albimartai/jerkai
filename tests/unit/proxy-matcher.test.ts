@@ -49,7 +49,7 @@ describe("proxy matcher", () => {
     // /demo (docs/prd/public-demo.md, AC-PD1, NFR-49): the public demo
     // surface — synthetic fixture data only, no auth() call, no DB import.
     "/demo",
-    "/demo/weekly",
+    "/demo/results",
     "/demo/daily",
     // AC-AB1 (docs/prd/demo-about.md): the About surface is a route inside
     // the same /demo subtree, so it inherits this exclusion with no matcher
@@ -122,8 +122,8 @@ describe("proxy matcher — AC-WS20: Withings callback/sync session-gate exclusi
 
 // The path-only matcher above cannot express "any path under this host is
 // public" — middleware evaluates its matcher against the request's ORIGINAL
-// incoming path, which for a demo.jerkai.app visitor is "/" (or "/weekly",
-// "/daily"), not "/demo/weekly", so those paths are NOT excluded by the
+// incoming path, which for a demo.jerkai.app visitor is "/" (or "/results",
+// "/daily"), not "/demo/results", so those paths are NOT excluded by the
 // demo(?:$|/) pattern. proxy.ts instead checks the Host header at runtime
 // and rewrites directly into /demo/* for that host, regardless of path,
 // never reaching auth() — these tests exercise that runtime logic directly
@@ -152,12 +152,12 @@ async function callProxy(url: string): Promise<NextResponse> {
 }
 
 describe("proxy host bypass for demo.jerkai.app", () => {
-  it("rewrites demo.jerkai.app/ to /demo/weekly without calling auth() (regression: used to 307 to jerkai.app/signin)", async () => {
+  it("rewrites demo.jerkai.app/ to /demo/results without calling auth() (regression: used to 307 to jerkai.app/signin)", async () => {
     authMock.mockClear();
     const response = await callProxy("https://demo.jerkai.app/");
     expect(authMock).not.toHaveBeenCalled();
     expect(isRewrite(response)).toBe(true);
-    expect(getRewrittenUrl(response)).toBe("https://demo.jerkai.app/demo/weekly");
+    expect(getRewrittenUrl(response)).toBe("https://demo.jerkai.app/demo/results");
   });
 
   it("rewrites demo.jerkai.app/daily (with a query string) to /demo/daily, preserving the query", async () => {
@@ -211,6 +211,6 @@ describe("proxy host bypass for demo.jerkai.app", () => {
     const response = await callProxy("http://demo.jerkai.app:3000/");
     expect(authMock).not.toHaveBeenCalled();
     expect(isRewrite(response)).toBe(true);
-    expect(getRewrittenUrl(response)).toBe("http://demo.jerkai.app:3000/demo/weekly");
+    expect(getRewrittenUrl(response)).toBe("http://demo.jerkai.app:3000/demo/results");
   });
 });

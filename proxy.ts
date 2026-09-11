@@ -46,10 +46,10 @@ import { auth } from "@/auth";
 // Per Next's own docs (node_modules/next/dist/docs/.../proxy.md,
 // "Execution order"), Proxy always runs BEFORE any next.config.js rewrite
 // (steps 3 vs 4/6/8), regardless of beforeFiles/afterFiles/fallback. A
-// visitor typing "demo.jerkai.app" requests path "/" (or "/weekly",
-// "/daily"), not "/demo/weekly" — that path doesn't match the demo(?:$|/)
+// visitor typing "demo.jerkai.app" requests path "/" (or "/results",
+// "/daily"), not "/demo/results" — that path doesn't match the demo(?:$|/)
 // matcher exclusion, so proxy() DOES run for it, and a next.config.ts
-// rewrite from "/" to "/demo/weekly" would never get a chance to fire
+// rewrite from "/" to "/demo/results" would never get a chance to fire
 // before auth() had already redirected the request. (Confirmed live, pre-fix:
 // demo.jerkai.app/demo/weekly worked; demo.jerkai.app/ 307'd to
 // jerkai.app/signin, because auth() ran on the original "/" path.)
@@ -76,7 +76,7 @@ function isDemoHost(host: string): boolean {
 export default function proxy(request: NextRequest, event: NextFetchEvent) {
   if (isDemoHost(request.headers.get("host") ?? "")) {
     const url = request.nextUrl.clone();
-    url.pathname = url.pathname === "/" ? "/demo/weekly" : `/demo${url.pathname}`;
+    url.pathname = url.pathname === "/" ? "/demo/results" : `/demo${url.pathname}`;
     return NextResponse.rewrite(url);
   }
   // The auth config is lazily initialized (see auth.ts), which makes `auth`'s
