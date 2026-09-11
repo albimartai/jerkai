@@ -33,12 +33,12 @@ describe("nav header variants (AC-AB2, NFR-61)", () => {
   });
 
   it("NFR-61: the live variant's existing links are unchanged by this slice", () => {
-    const markup = renderToStaticMarkup(<NavHeader active="weekly" />);
+    const markup = renderToStaticMarkup(<NavHeader active="results" />);
     // "/status" -> "/data" -> "/connect" (Data Page Redesign & Connect, PRD
     // §1; Rename /data Page to /connect, PRD §1): this is an ordinary,
     // non-stub test (carries no DO-NOT-EDIT header), so its href list gets
     // an ordinary update, not a PRD-authorized stub exception.
-    for (const href of ["/weekly", "/daily", "/settings/targets", "/log-meal", "/connect"]) {
+    for (const href of ["/results", "/daily", "/settings/targets", "/log-meal", "/connect"]) {
       expect(markup).toContain(`href="${href}"`);
     }
     expect(markup).toContain('aria-current="page"');
@@ -92,7 +92,7 @@ describe("nav header active highlight — Connect, Log Meal, Targets (AC-DS18, A
   // widens it to this exact union — casting to it here (rather than
   // `@ts-expect-error`) stays valid both before and after that widening ships,
   // so this stub never needs a build-time edit to its own type-check status.
-  type ProspectiveActive = "weekly" | "daily" | "connect" | "logmeal" | "targets";
+  type ProspectiveActive = "results" | "daily" | "connect" | "logmeal" | "targets";
   const ACTIVE_CLASSES = "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900";
 
   function linkMarkup(markup: string, href: string): string | null {
@@ -108,7 +108,7 @@ describe("nav header active highlight — Connect, Log Meal, Targets (AC-DS18, A
     const dataLink = linkMarkup(markup, "/connect");
     expect(dataLink).not.toBeNull();
     expect(dataLink).toContain(ACTIVE_CLASSES);
-    for (const href of ["/weekly", "/daily", "/settings/targets", "/log-meal"]) {
+    for (const href of ["/results", "/daily", "/settings/targets", "/log-meal"]) {
       const link = linkMarkup(markup, href);
       expect(link).not.toBeNull();
       expect(link).not.toContain(ACTIVE_CLASSES);
@@ -122,22 +122,22 @@ describe("nav header active highlight — Connect, Log Meal, Targets (AC-DS18, A
     const logMealLink = linkMarkup(markup, "/log-meal");
     expect(logMealLink).not.toBeNull();
     expect(logMealLink).toContain(ACTIVE_CLASSES);
-    for (const href of ["/weekly", "/daily", "/settings/targets", "/connect"]) {
+    for (const href of ["/results", "/daily", "/settings/targets", "/connect"]) {
       const link = linkMarkup(markup, href);
       expect(link).not.toBeNull();
       expect(link).not.toContain(ACTIVE_CLASSES);
     }
   });
 
-  it('AC-DS20 (regression, cross-page isolation): active="weekly" or active="daily" leaves Connect, Log Meal, and Targets in their non-active treatment, and Weekly/Daily\'s own existing active behavior is unchanged', () => {
-    for (const active of ["weekly", "daily"] as const) {
+  it('AC-DS20 (regression, cross-page isolation): active="results" or active="daily" leaves Connect, Log Meal, and Targets in their non-active treatment, and Results/Daily\'s own existing active behavior is unchanged', () => {
+    for (const active of ["results", "daily"] as const) {
       const markup = renderToStaticMarkup(<NavHeader active={active} />);
       for (const href of ["/connect", "/log-meal", "/settings/targets"]) {
         const link = linkMarkup(markup, href);
         expect(link).not.toBeNull();
         expect(link).not.toContain(ACTIVE_CLASSES);
       }
-      const activeHref = active === "weekly" ? "/weekly" : "/daily";
+      const activeHref = active === "results" ? "/results" : "/daily";
       const activeLink = linkMarkup(markup, activeHref);
       expect(activeLink).not.toBeNull();
       expect(activeLink).toContain(ACTIVE_CLASSES);
@@ -151,7 +151,7 @@ describe("nav header active highlight — Connect, Log Meal, Targets (AC-DS18, A
     const targetsLink = linkMarkup(markup, "/settings/targets");
     expect(targetsLink).not.toBeNull();
     expect(targetsLink).toContain(ACTIVE_CLASSES);
-    for (const href of ["/weekly", "/daily", "/connect", "/log-meal"]) {
+    for (const href of ["/results", "/daily", "/connect", "/log-meal"]) {
       const link = linkMarkup(markup, href);
       expect(link).not.toBeNull();
       expect(link).not.toContain(ACTIVE_CLASSES);

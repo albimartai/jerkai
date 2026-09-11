@@ -154,7 +154,7 @@ describe("/connect — AC-WT8: sync history scoped to the signed-in user", () =>
  * Editing stubs to fit implementation triggers a blocking finding in jerkai-falsify-diff.
  */
 describe("/connect — AC-D18: shared header chrome", () => {
-  it("AC-D18: /connect renders the same NavHeader as every other gated page, with neither Weekly nor Daily active", async () => {
+  it("AC-D18: /connect renders the same NavHeader as every other gated page, with neither Results nor Daily active", async () => {
     const [user] = await sql`insert into users (email) values ('status-header-test@example.com') returning id`;
 
     const html = await renderStatusFor(user.id);
@@ -167,7 +167,7 @@ describe("/connect — AC-D18: shared header chrome", () => {
     // (Data Page Redesign & Connect, §0.3): last entry "/status" -> "/data"
     // -> "/connect", the identical convention this file already used twice
     // for AC-WT8/AC-ST1.
-    const hrefs = ["/weekly", "/daily", "/settings/targets", "/log-meal", "/connect"];
+    const hrefs = ["/results", "/daily", "/settings/targets", "/log-meal", "/connect"];
     const indices = hrefs.map((href) => html.indexOf(`href="${href}"`));
     for (const index of indices) {
       expect(index).toBeGreaterThan(-1);

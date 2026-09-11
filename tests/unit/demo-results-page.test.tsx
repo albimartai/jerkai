@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
-import DemoWeekly from "@/app/demo/weekly/page";
+import DemoResults from "@/app/demo/results/page";
 
 // AC-PD1/PD4/PD7 (docs/prd/public-demo.md): the demo Weekly Ledger renders
 // from the synthetic fixture, with no gated-route links and the synthetic-
@@ -17,25 +17,25 @@ vi.mock("next/link", () => ({
 
 describe("demo weekly page (AC-PD1, AC-PD4)", () => {
   it("AC-PD1: renders the Weekly Ledger from synthetic data, no /signin redirect logic", () => {
-    const markup = renderToStaticMarkup(<DemoWeekly />);
+    const markup = renderToStaticMarkup(<DemoResults />);
     expect(markup).toContain("data-ledger");
   });
 
   it("AC-PD2: a completed week's drill-down link points at /demo/daily, not the gated /daily", () => {
-    const markup = renderToStaticMarkup(<DemoWeekly />);
+    const markup = renderToStaticMarkup(<DemoResults />);
     expect(markup).toMatch(/href="\/demo\/daily\?week=/);
     expect(markup).not.toMatch(/href="\/daily\?week=/);
   });
 
   it("AC-PD4: no Targets, Log meal, or Status link is present", () => {
-    const markup = renderToStaticMarkup(<DemoWeekly />);
+    const markup = renderToStaticMarkup(<DemoResults />);
     expect(markup).not.toContain('href="/settings/targets"');
     expect(markup).not.toContain('href="/log-meal"');
     expect(markup).not.toContain('href="/status"');
   });
 
-  it("Weekly nav link points at /demo/weekly", () => {
-    const markup = renderToStaticMarkup(<DemoWeekly />);
-    expect(markup).toContain('href="/demo/weekly"');
+  it("Results nav link points at /demo/results", () => {
+    const markup = renderToStaticMarkup(<DemoResults />);
+    expect(markup).toContain('href="/demo/results"');
   });
 });
