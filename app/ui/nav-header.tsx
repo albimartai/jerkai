@@ -1,32 +1,32 @@
 import Link from "next/link";
 
-// Shared header, routes named by resolution (AC-W8): Results (`/results`,
+// Shared header, routes named by resolution (AC-W8): Body (`/body`,
 // default landing) and Daily (`/daily`, the strip-stack drill-down). Connect
 // behavior is unchanged (AC-D15).
 
 // `variant="demo"` (docs/prd/public-demo.md, AC-PD4) renders on the public
-// demo surface: the resolution links point at the demo's own /demo/results
+// demo surface: the resolution links point at the demo's own /demo/body
 // and /demo/daily paths (never the gated real routes), and Targets/
 // "+ Log meal"/Connect — every write-adjacent or gated link — are omitted
 // entirely, not disabled. Default "live" is today's unchanged behavior.
 type NavVariant = "live" | "demo";
 
-function resolutionHref(label: "Results" | "Daily", variant: NavVariant): string {
-  const path = label === "Results" ? "results" : "daily";
+function resolutionHref(label: "Body" | "Daily", variant: NavVariant): string {
+  const path = label === "Body" ? "body" : "daily";
   return variant === "demo" ? `/demo/${path}` : `/${path}`;
 }
 
-const RESOLUTION_LABELS = ["Results", "Daily"] as const;
+const RESOLUTION_LABELS = ["Body", "Daily"] as const;
 
 // `active` widens additively (Data Page Redesign & Connect, §0.8) from the original
-// Results/Daily resolution pair to all five live-variant links — Connect, Log Meal, and
-// Targets now participate in the identical highlight mechanism Results/Daily already used,
+// Body/Daily resolution pair to all five live-variant links — Connect, Log Meal, and
+// Targets now participate in the identical highlight mechanism Body/Daily already used,
 // with no new color or font (NFR-129/NFR-130). `undefined` still highlights nothing.
 export function NavHeader({
   active,
   variant = "live",
 }: {
-  active?: "results" | "daily" | "connect" | "logmeal" | "targets";
+  active?: "body" | "daily" | "connect" | "logmeal" | "targets";
   variant?: NavVariant;
 } = {}) {
   return (
@@ -55,7 +55,7 @@ export function NavHeader({
           // explains the synthetic data and the deliberately absent write
           // surfaces to a cold visitor, which the authenticated app has no
           // reader for. It carries no active state — `active` is typed to the
-          // Results/Daily resolution pair, and widening it would change the
+          // Body/Daily resolution pair, and widening it would change the
           // shared live path too.
           <Link
             href="/demo/about"
@@ -68,9 +68,9 @@ export function NavHeader({
             {/* Log Meal ships in this slice (AC-M13) — the CTA returns per AC-D14's own
                 terms. "+ Log workout" stays absent (its slice hasn't shipped). Targets,
                 Log Meal, and Connect (renamed from Data) each carry the same active-highlight
-                ternary Results/Daily already use (AC-DS18/AC-DS19/AC-DS21, §0.8) — the
+                ternary Body/Daily already use (AC-DS18/AC-DS19/AC-DS21, §0.8) — the
                 zinc/emerald-consistent bg-zinc-900/dark:bg-zinc-100 formula, never a new
-                color. No aria-current here (unlike Results/Daily, pre-existing): AC-D18's
+                color. No aria-current here (unlike Body/Daily, pre-existing): AC-D18's
                 DO NOT EDIT test asserts /connect renders with zero aria-current="page"
                 anywhere, and the PRD's own AC-DS18/19/21 text specifies only the visual
                 treatment, not an aria-current claim. */}

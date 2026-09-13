@@ -84,7 +84,7 @@ describe("demo about page (AC-AB3, AC-AB5, AC-AB6, AC-AB7)", () => {
 
   it("AC-AB2/AC-AB5: renders the demo nav, so About is a stop on the demo and not a dead end", () => {
     const html = markup();
-    expect(html).toContain('href="/demo/results"');
+    expect(html).toContain('href="/demo/body"');
     expect(html).toContain('href="/demo/daily"');
     // Neither resolution link is active while on About, and no gated or
     // write-adjacent link leaks onto the surface (AC-PD4 still in force).
