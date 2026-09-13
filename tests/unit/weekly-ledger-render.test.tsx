@@ -77,6 +77,12 @@ describe("WeeklyLedger — week rows (AC-W1, AC-W5)", () => {
     expect(markup.indexOf("Jul 13")).toBeLessThan(markup.indexOf("Jul 6"));
   });
 
+  it("AC-W24: the real WeeklyLedger component's own NavHeader call renders the Body nav link at /body", () => {
+    const markup = render([completedWeek("2026-07-13", "2026-07-19")], 2);
+    expect(markup).toContain('href="/body"');
+    expect(markup).toContain(">Body<");
+  });
+
   it("AC-W1: the in-progress row is labeled with days elapsed, styled distinctly, and not a drill-down link", () => {
     const inProgress: WeekRow = {
       weekStart: "2026-07-20",

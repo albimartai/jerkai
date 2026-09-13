@@ -41,10 +41,10 @@ describe("demo about page (AC-AB3, AC-AB5, AC-AB6, AC-AB7)", () => {
     }
   });
 
-  it("AC-AB3: renders the two-screen list as a real list, not flattened prose", () => {
+  it("AC-AB3, AC-W29: renders the two-screen list as a real list, not flattened prose", () => {
     const html = markup();
     expect(html).toMatch(/<ul[^>]*>/);
-    expect(html).toMatch(/<li[^>]*>[\s\S]*Results[\s\S]*<\/li>/);
+    expect(html).toMatch(/<li[^>]*>[\s\S]*Body[\s\S]*<\/li>/);
     expect(html).toMatch(/<li[^>]*>[\s\S]*Daily[\s\S]*<\/li>/);
   });
 
