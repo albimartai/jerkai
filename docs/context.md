@@ -30,7 +30,7 @@ deliberately outside the driver tree (DL-2026-08-03-a1):
 
 ## Surfaces & routes (Weekly Ledger, DL-2026-07-19-a)
 Two resolutions, one nav: **`/body`** (the Weekly Ledger) is the default landing page —
-one row per ISO week (Mon–Sun), five columns of deltas/states, newest week first, capped at
+one row per ISO week (Mon–Sun), three columns of deltas/states, newest week first, capped at
 13 completed weeks plus the current in-progress week. It answers "how did my weeks go?" in
 one scan. **`/daily`** is the strip stack (below) — the drill-down surface opened from a
 ledger row, or directly for day-level co-movement investigation. Every page header carries

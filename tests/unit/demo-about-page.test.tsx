@@ -48,6 +48,12 @@ describe("demo about page (AC-AB3, AC-AB5, AC-AB6, AC-AB7)", () => {
     expect(html).toMatch(/<li[^>]*>[\s\S]*Daily[\s\S]*<\/li>/);
   });
 
+  it("AC-W35: the Body list item's sentence reads 'three columns', not 'five'", () => {
+    const html = markup();
+    expect(html).toMatch(/three columns/i);
+    expect(html).not.toMatch(/five columns/i);
+  });
+
   it("AC-AB3: carries a distinctive phrase from each of the four sections", () => {
     const html = markup();
     expect(html).toContain("treats the daily body fat reading as noise");

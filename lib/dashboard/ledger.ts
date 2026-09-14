@@ -1,6 +1,6 @@
 import { isoWeekEnd, isoWeekStart } from "@/lib/dashboard/iso-week";
 import { addDays } from "@/lib/dashboard/series";
-import type { LedgerConfig, RecoveryConfig } from "@/lib/dashboard/config";
+import type { LedgerConfig } from "@/lib/dashboard/config";
 
 // Weekly Ledger (NFR-21): pure functions over daily series + config, no DB,
 // no rendering. The `/body` page and the hero badge (weekly-badge.ts) are
@@ -20,17 +20,11 @@ export type LedgerCell =
   | { kind: "insufficient"; daysPresent: number }
   // Body fat / weight / lean mass: end-of-week smoothed value minus the
   // prior week's (AC-W2).
-  | { kind: "delta"; value: number; state: CellState }
-  // Day Strain: the week's average daily strain (0–21, AC-W3 col 3).
-  | { kind: "strainLevel"; value: number }
-  // Recovery: weekly average % + red-zone day count (AC-W3 col 4).
-  | { kind: "recoveryLevel"; avgPct: number; redDays: number };
+  | { kind: "delta"; value: number; state: CellState };
 
 export type WeekColumns = {
   bodyFat: LedgerCell;
   weight: LedgerCell;
-  strain: LedgerCell;
-  recovery: LedgerCell;
   leanMass: LedgerCell;
 };
 
@@ -42,7 +36,7 @@ export type WeekRow = {
   inProgress: boolean;
   daysElapsed: number; // 1–7 for the in-progress row; always 7 for a completed row
   // AC-W7: a week with no data at all for ANY series collapses to a single
-  // gap row instead of five "insufficient data" cells.
+  // gap row instead of three "insufficient data" cells.
   isGap: boolean;
   columns: WeekColumns;
 };
@@ -56,12 +50,10 @@ export type LedgerInput = {
   weightRaw: readonly (number | null)[];
   // 7-day rolling weight (AC-W3 col 2's source series).
   weight7: readonly (number | null)[];
-  strainRaw: readonly (number | null)[];
-  recoveryRaw: readonly (number | null)[];
   // Already converted to lb (NFR-16), matching the strip dashboard's
   // convention — the ledger never converts units itself.
   leanMassRaw: readonly (number | null)[];
-  // 7-day rolling lean mass, lb (AC-W3 col 5's source series).
+  // 7-day rolling lean mass, lb (AC-W3 col 3's source series).
   leanMass7: readonly (number | null)[];
 };
 
@@ -114,46 +106,8 @@ const bodyFatState = (epsilon: number) => (delta: number): CellState =>
 const leanMassState = (bandLbPerWeek: number) => (delta: number): CellState =>
   delta < -bandLbPerWeek ? "warning" : "neutral";
 
-function strainCell(
-  raw: readonly (number | null)[],
-  weekIndices: readonly number[],
-  minDaysPerWeek: number,
-): LedgerCell {
-  const present = weekIndices
-    .map((i) => raw[i])
-    .filter((value): value is number => value !== null);
-  if (present.length < minDaysPerWeek) {
-    return { kind: "insufficient", daysPresent: present.length };
-  }
-  const avg = present.reduce((sum, value) => sum + value, 0) / present.length;
-  return { kind: "strainLevel", value: avg };
-}
-
-function recoveryCell(
-  raw: readonly (number | null)[],
-  weekIndices: readonly number[],
-  minDaysPerWeek: number,
-  redBelowPct: number,
-): LedgerCell {
-  const present = weekIndices
-    .map((i) => raw[i])
-    .filter((value): value is number => value !== null);
-  if (present.length < minDaysPerWeek) {
-    return { kind: "insufficient", daysPresent: present.length };
-  }
-  const avgPct = present.reduce((sum, value) => sum + value, 0) / present.length;
-  const redDays = present.filter((value) => value < redBelowPct).length;
-  return { kind: "recoveryLevel", avgPct, redDays };
-}
-
 function isEmptyWeek(input: LedgerInput, weekIndices: readonly number[]): boolean {
-  const seriesList = [
-    input.bodyFatRaw,
-    input.weightRaw,
-    input.strainRaw,
-    input.recoveryRaw,
-    input.leanMassRaw,
-  ];
+  const seriesList = [input.bodyFatRaw, input.weightRaw, input.leanMassRaw];
   return seriesList.every((series) => rawPresentCount(series, weekIndices) === 0);
 }
 
@@ -163,11 +117,7 @@ function isEmptyWeek(input: LedgerInput, weekIndices: readonly number[]): boolea
 // are dropped rather than shown with a fabricated "insufficient data" read
 // — the axis's own trailing window (not the ledger) decides how much
 // history is available.
-export function buildWeeklyLedger(
-  input: LedgerInput,
-  cfg: LedgerConfig,
-  recoveryCfg: Pick<RecoveryConfig, "redBelowPct">,
-): WeekRow[] {
+export function buildWeeklyLedger(input: LedgerInput, cfg: LedgerConfig): WeekRow[] {
   const { axis } = input;
   if (axis.length === 0) return [];
 
@@ -232,12 +182,6 @@ export function buildWeeklyLedger(
           cfg.minDaysPerWeek,
           leanMassDelta,
         );
-    const strain = gap
-      ? { kind: "insufficient" as const, daysPresent: 0 }
-      : strainCell(input.strainRaw, indices, cfg.minDaysPerWeek);
-    const recovery = gap
-      ? { kind: "insufficient" as const, daysPresent: 0 }
-      : recoveryCell(input.recoveryRaw, indices, cfg.minDaysPerWeek, recoveryCfg.redBelowPct);
 
     // Only a completed week's endpoint feeds forward as the next week's
     // comparison point — the in-progress week is never a valid prior.
@@ -256,7 +200,7 @@ export function buildWeeklyLedger(
       inProgress,
       daysElapsed: inProgress ? indices.length || 1 : COMPLETED_DAYS_ELAPSED,
       isGap: gap,
-      columns: { bodyFat, weight, strain, recovery, leanMass },
+      columns: { bodyFat, weight, leanMass },
     });
   }
 

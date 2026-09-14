@@ -41,13 +41,10 @@ export function buildWeeklyView(data: DashboardData): WeeklyView {
       bodyFat30,
       weightRaw: weightLb,
       weight7,
-      strainRaw: data.series.dayStrain,
-      recoveryRaw: data.series.recoveryScore,
       leanMassRaw: leanMassLb,
       leanMass7,
     },
     DASHBOARD_CONFIG.ledger,
-    DASHBOARD_CONFIG.recovery,
   );
   const badge = weeklyStallBadge(rows, () => stallBadge(bodyFat30));
 
