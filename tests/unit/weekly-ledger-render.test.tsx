@@ -43,8 +43,6 @@ function completedWeek(weekStart: string, weekEnd: string, overrides: Partial<We
     columns: {
       bodyFat: okDelta(-0.2, "good"),
       weight: okDelta(-0.5),
-      strain: { kind: "strainLevel", value: 12.4 },
-      recovery: { kind: "recoveryLevel", avgPct: 68, redDays: 1 },
       leanMass: okDelta(-0.05, "neutral"),
       ...overrides,
     },
@@ -98,6 +96,12 @@ describe("WeeklyLedger — week rows (AC-W1, AC-W5)", () => {
     // content, not an <a href="/daily..."> drill-down link.
     expect(markup).toContain('data-week-row="in-progress"><div');
   });
+
+  it("AC-W32 (bare case): the rendered ledger shows exactly three metric columns and no Strain or Recovery column header, cell, or value anywhere on the page", () => {
+    const markup = render([completedWeek("2026-07-13", "2026-07-19")], 2);
+    expect(markup).not.toContain(">Strain<");
+    expect(markup).not.toContain(">Recovery<");
+  });
 });
 
 describe("WeeklyLedger — drill-down (AC-W6)", () => {
@@ -127,25 +131,6 @@ describe("WeeklyLedger — column states (AC-W3, AC-W4)", () => {
     expect(markup).toContain("text-amber-700");
   });
 
-  it("strain renders a level, not a delta", () => {
-    const markup = render(
-      [completedWeek("2026-07-13", "2026-07-19", { strain: { kind: "strainLevel", value: 14.55 } })],
-      2,
-    );
-    expect(markup).toContain("14.6"); // one decimal
-  });
-
-  it("recovery renders the weekly average and red-day count", () => {
-    const markup = render(
-      [
-        completedWeek("2026-07-13", "2026-07-19", {
-          recovery: { kind: "recoveryLevel", avgPct: 68, redDays: 2 },
-        }),
-      ],
-      2,
-    );
-    expect(markup).toContain("68% · 2 red days");
-  });
 });
 
 describe("WeeklyLedger — sparse and gap weeks (AC-W7)", () => {

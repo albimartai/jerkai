@@ -11,9 +11,11 @@ import { addDays } from "@/lib/dashboard/series";
 // The badge is a thin consumer of buildWeeklyLedger's rows — never its own
 // math — so a shared fixture asserted against both the table's row state
 // and the badge is what makes AC-W12 (they can never disagree) provable.
+//
+// Drop Strain and Recovery Columns (AC-W32-AC-W36): buildWeeklyLedger is now
+// a two-parameter function — these call sites no longer pass a recoveryCfg.
 
 const cfg = DASHBOARD_CONFIG.ledger;
-const recoveryCfg = DASHBOARD_CONFIG.recovery;
 const MONDAY = "2026-06-01"; // known Monday
 
 function axisOf(startDay: string, days: number): string[] {
@@ -29,8 +31,6 @@ function fixture(bodyFat30: (number | null)[], overrides: Partial<LedgerInput> =
     bodyFat30,
     weightRaw: overrides.weightRaw ?? flat(180),
     weight7: overrides.weight7 ?? rollingAverage(overrides.weightRaw ?? flat(180), 7),
-    strainRaw: overrides.strainRaw ?? flat(12),
-    recoveryRaw: overrides.recoveryRaw ?? flat(70),
     leanMassRaw: overrides.leanMassRaw ?? flat(152),
     leanMass7: overrides.leanMass7 ?? rollingAverage(overrides.leanMassRaw ?? flat(152), 7),
   };
@@ -46,7 +46,7 @@ describe("weeklyStallBadge — weekly basis (AC-W10)", () => {
       ...axis.slice(7, 14).map(() => 18.6),
       ...axis.slice(14).map(() => 18.6),
     ];
-    const rows = buildWeeklyLedger(fixture(bodyFat30), cfg, recoveryCfg);
+    const rows = buildWeeklyLedger(fixture(bodyFat30), cfg);
     const badge = weeklyStallBadge(rows, () => fallbackSentinel);
     expect(badge.tone).toBe("good");
     expect(badge.label).toMatch(/^▾ trending down \d+ wks?$/);
@@ -59,7 +59,7 @@ describe("weeklyStallBadge — weekly basis (AC-W10)", () => {
       ...axis.slice(7, 14).map(() => 18.6),
       ...axis.slice(14).map(() => 18.6),
     ];
-    const rows = buildWeeklyLedger(fixture(bodyFat30), cfg, recoveryCfg);
+    const rows = buildWeeklyLedger(fixture(bodyFat30), cfg);
     expect(weeklyStallBadge(rows, () => fallbackSentinel)).toEqual({
       tone: "warning",
       label: "▴ trend rising — check drivers",
@@ -73,7 +73,7 @@ describe("weeklyStallBadge — weekly basis (AC-W10)", () => {
       ...axis.slice(7, 14).map(() => 18.41),
       ...axis.slice(14).map(() => 18.41),
     ];
-    const rows = buildWeeklyLedger(fixture(bodyFat30), cfg, recoveryCfg);
+    const rows = buildWeeklyLedger(fixture(bodyFat30), cfg);
     expect(weeklyStallBadge(rows, () => fallbackSentinel)).toEqual({
       tone: "neutral",
       label: "— trend flat",
@@ -83,20 +83,20 @@ describe("weeklyStallBadge — weekly basis (AC-W10)", () => {
 
 describe("weeklyStallBadge — cold-start fallback (AC-W11)", () => {
   it("with 0 completed weeks, falls back rather than fabricating a weekly state", () => {
-    const rows = buildWeeklyLedger(fixture(axisOf(MONDAY, 4).map(() => 18.4)), cfg, recoveryCfg);
+    const rows = buildWeeklyLedger(fixture(axisOf(MONDAY, 4).map(() => 18.4)), cfg);
     expect(weeklyStallBadge(rows, () => fallbackSentinel)).toEqual(fallbackSentinel);
   });
 
   it("with exactly 1 completed week, falls back rather than showing a one-week trend", () => {
     const axis = axisOf(MONDAY, 10); // 1 completed week + 3 in-progress days
     const bodyFat30 = axis.map(() => 18.4);
-    const rows = buildWeeklyLedger(fixture(bodyFat30), cfg, recoveryCfg);
+    const rows = buildWeeklyLedger(fixture(bodyFat30), cfg);
     expect(weeklyStallBadge(rows, () => fallbackSentinel)).toEqual(fallbackSentinel);
   });
 
   it("the fallback is the real AC-D4–D6 daily-streak badge, unchanged", () => {
     const falling = Array.from({ length: 15 }, (_, i) => 20 - i * 0.05);
-    const rows = buildWeeklyLedger(fixture(axisOf(MONDAY, 4).map(() => 18.4)), cfg, recoveryCfg);
+    const rows = buildWeeklyLedger(fixture(axisOf(MONDAY, 4).map(() => 18.4)), cfg);
     expect(weeklyStallBadge(rows, () => stallBadge(falling))).toEqual(stallBadge(falling));
   });
 });
@@ -109,7 +109,7 @@ describe("weeklyStallBadge — consistency guarantee (AC-W12)", () => {
       [...Array(7).fill(18.4), ...Array(7).fill(18.41), ...Array(7).fill(18.41)], // flat
     ];
     for (const bodyFat30 of scenarios) {
-      const rows = buildWeeklyLedger(fixture(bodyFat30), cfg, recoveryCfg);
+      const rows = buildWeeklyLedger(fixture(bodyFat30), cfg);
       const badge = weeklyStallBadge(rows, () => fallbackSentinel);
       const mostRecentCompleted = rows.find((r) => !r.inProgress)!;
       const cell = mostRecentCompleted.columns.bodyFat;
@@ -127,7 +127,7 @@ describe("weeklyStallBadge — consistency guarantee (AC-W12)", () => {
       [...Array(7).fill(18.2), ...Array(7).fill(18.6), ...Array(7).fill(18.6)],
     ];
     for (const bodyFat30 of scenarios) {
-      const rows = buildWeeklyLedger(fixture(bodyFat30), cfg, recoveryCfg);
+      const rows = buildWeeklyLedger(fixture(bodyFat30), cfg);
       expect(weeklyStallBadge(rows, () => fallbackSentinel).label).toMatch(passive);
     }
   });
