@@ -59,7 +59,7 @@ export default function DemoAbout() {
           <ul className="flex list-disc flex-col gap-2 pl-5">
             <li>
               <strong className="font-semibold text-zinc-900 dark:text-zinc-100">Body</strong>: one
-              row per week, five columns. How did my weeks go, in one scan.
+              row per week, three columns. How did my weeks go, in one scan.
             </li>
             <li>
               <strong className="font-semibold text-zinc-900 dark:text-zinc-100">Daily</strong>: the

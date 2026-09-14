@@ -3,7 +3,7 @@ import Link from "next/link";
 import { NavHeader } from "@/app/ui/nav-header";
 import type { LedgerCell, WeekRow } from "@/lib/dashboard/ledger";
 
-// The Weekly Ledger (AC-W1–W9): one row per ISO week, newest first, five
+// The Weekly Ledger (AC-W1–W9): one row per ISO week, newest first, three
 // metric columns of deltas/states computed from the same smoothed series
 // the strip dashboard renders (buildWeeklyView, NFR-21). Plain server
 // markup — row drill-down is a real <Link> (AC-W6), no client JS required.
@@ -41,20 +41,10 @@ function Cell({ cell, unit, digits = 1 }: { cell: LedgerCell; unit: string; digi
       </span>
     );
   }
-  if (cell.kind === "delta") {
-    return <span className={TONE_CLASSES[cell.state]}>{fmtSigned(cell.value, unit, digits)}</span>;
-  }
-  if (cell.kind === "strainLevel") {
-    return <span className={TONE_CLASSES.neutral}>{cell.value.toFixed(1)}</span>;
-  }
-  return (
-    <span className={TONE_CLASSES.neutral}>
-      {Math.round(cell.avgPct)}% · {cell.redDays} red {cell.redDays === 1 ? "day" : "days"}
-    </span>
-  );
+  return <span className={TONE_CLASSES[cell.state]}>{fmtSigned(cell.value, unit, digits)}</span>;
 }
 
-const GRID_COLS = "grid-cols-[1.3fr_repeat(5,minmax(0,1fr))]";
+const GRID_COLS = "grid-cols-[1.3fr_repeat(3,minmax(0,1fr))]";
 
 function WeekRowContent({ row }: { row: WeekRow }) {
   const label = row.inProgress
@@ -72,8 +62,6 @@ function WeekRowContent({ row }: { row: WeekRow }) {
       </span>
       <Cell cell={row.columns.bodyFat} unit="pp" />
       <Cell cell={row.columns.weight} unit="lb" />
-      <Cell cell={row.columns.strain} unit="" />
-      <Cell cell={row.columns.recovery} unit="" />
       <Cell cell={row.columns.leanMass} unit="lb" />
     </div>
   );
@@ -150,8 +138,6 @@ export default function WeeklyLedger({
               <span>Week</span>
               <span>Body fat</span>
               <span>Weight</span>
-              <span>Strain</span>
-              <span>Recovery</span>
               <span>Lean mass</span>
             </div>
             {rows.map((row) => (
