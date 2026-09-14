@@ -7,7 +7,7 @@ cite a fact instead of re-deriving it. It covers modules, data flow, conventions
 It deliberately does not cover product intent (`docs/context.md`), schema DDL or local setup
 (`README.md`), or process (`docs/definition-of-ready-and-done.md`).
 
-**Derived at:** commit `859778a` (branch `feat/body-page-rename`, pre-merge), 2026-09-13.
+**Derived at:** commit `a15e4e4` (branch `feat/drop-strain-recovery-columns`, pre-merge), 2026-09-14.
 
 **Staleness rule.** This is a snapshot of a moving target. A PRD citing it must re-verify
 the specific claims it leans on. Where a claim disagrees with the code, **the file is wrong
@@ -270,7 +270,7 @@ not in either checkout, so its ids are read from source, tests and commit subjec
 |---|---|---|---|
 | `AC-D` | jerkai | 21 | v1 dashboard (`docs/prd/archive/v1-dashboard.md`; carried forward unchanged by v1.1; AC-D18–AC-D21 added by Nav Header Cleanup & Status Page Chrome) |
 | `AC-N` | jerkai | 14 | v1.1 dashboard |
-| `AC-W` | jerkai | 31 | Weekly Ledger (`docs/prd/archive/weekly-ledger.md`; AC-W13–AC-W15 added by Weekly Ledger Week Column Wrap, `docs/prd/weekly-ledger-week-column-wrap.md`); AC-W16–AC-W23 added by Rename Weekly Page to Results (`docs/prd/rename-weekly-page-to-results.md`); AC-W24–AC-W31 added by Rename Results Page to Body (`docs/prd/rename-results-page-to-body.md`, this slice) |
+| `AC-W` | jerkai | 36 | Weekly Ledger (`docs/prd/archive/weekly-ledger.md`; AC-W13–AC-W15 added by Weekly Ledger Week Column Wrap, `docs/prd/weekly-ledger-week-column-wrap.md`); AC-W16–AC-W23 added by Rename Weekly Page to Results (`docs/prd/rename-weekly-page-to-results.md`); AC-W24–AC-W31 added by Rename Results Page to Body (`docs/prd/rename-results-page-to-body.md`); AC-W32–AC-W36 added by Drop Strain and Recovery Columns from the Weekly Ledger (`docs/prd/drop-strain-and-recovery-columns.md`, this slice) |
 | `AC-M` | jerkai | 35 | Log Meal and its fast-follows |
 | `AC-PD` | jerkai | 7 | Public Demo |
 | `AC-AB` | jerkai | 9 | Demo About |
@@ -288,8 +288,10 @@ not in either checkout, so its ids are read from source, tests and commit subjec
 | `AC-DS` | jerkai | 25 | Data Page Redesign & Connect (`docs/prd/data-page-redesign-and-connect.md`); AC-DS22–AC-DS25 added by Rename /data Page to /connect (`docs/prd/rename-data-page-to-connect.md`, this slice) |
 
 **NFR** is one ascending series **per repo**, not per-slice and not global across repos
-(DL-2026-07-31-a). In **jerkai** it is numeric, high-water mark **NFR-159** as of this slice
-(NFR-155–159, Rename Results Page to Body, `docs/prd/rename-results-page-to-body.md`;
+(DL-2026-07-31-a). In **jerkai** it is numeric, high-water mark **NFR-164** as of this slice
+(NFR-160–164, Drop Strain and Recovery Columns from the Weekly Ledger,
+`docs/prd/drop-strain-and-recovery-columns.md`; before it, high-water mark was NFR-159,
+NFR-155–159, Rename Results Page to Body, `docs/prd/rename-results-page-to-body.md`;
 before it, high-water mark was NFR-154, NFR-150–154, Rename Weekly Page to Results, `docs/prd/rename-weekly-page-to-results.md`;
 before it, high-water mark was NFR-149, NFR-145–149, Whoop Historical Backfill on First Connect, `docs/prd/whoop-historical-backfill-on-first-connect.md`;
 before it, high-water mark was NFR-144, NFR-141–144, Withings Backfill Trigger Logging, `docs/prd/withings-backfill-trigger-logging.md`;
