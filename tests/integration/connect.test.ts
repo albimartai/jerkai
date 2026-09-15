@@ -164,11 +164,13 @@ describe("/connect — AC-D18: shared header chrome", () => {
     // Content AND order (AC-D18's own language) — a scramble must fail this,
     // not just an absence, so each href's index must strictly increase.
     // PRD-authorized exception to this block's own DO-NOT-EDIT header
-    // (Data Page Redesign & Connect, §0.3; Fuel, §1): last entry "/status"
-    // -> "/data" -> "/connect", the identical convention this file already
-    // used twice for AC-WT8/AC-ST1; "/settings/targets" + "/log-meal" ->
-    // merged into "/fuel" (Fuel PRD).
-    const hrefs = ["/body", "/daily", "/fuel", "/connect"];
+    // (Data Page Redesign & Connect, §0.3; Fuel, §1; Engine, §1 AC-E10):
+    // last entry "/status" -> "/data" -> "/connect", the identical
+    // convention this file already used twice for AC-WT8/AC-ST1;
+    // "/settings/targets" + "/log-meal" -> merged into "/fuel" (Fuel PRD);
+    // "/engine" inserted between "/body" and "/fuel" (Engine PRD, five-item
+    // live order Body/Engine/Fuel/Daily/Connect).
+    const hrefs = ["/body", "/engine", "/fuel", "/daily", "/connect"];
     const indices = hrefs.map((href) => html.indexOf(`href="${href}"`));
     for (const index of indices) {
       expect(index).toBeGreaterThan(-1);
