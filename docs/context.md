@@ -34,8 +34,19 @@ one row per ISO week (Mon–Sun), three columns of deltas/states, newest week fi
 13 completed weeks plus the current in-progress week. It answers "how did my weeks go?" in
 one scan. **`/daily`** is the strip stack (below) — the drill-down surface opened from a
 ledger row, or directly for day-level co-movement investigation. Every page header carries
-Body/Daily/Fuel nav plus Connect (renamed from Data, `docs/prd/rename-data-page-to-connect.md`,
-this slice; the link-opens-the-page behavior itself is unaffected, AC-D15).
+Body, Engine, Fuel, Daily nav plus Connect (renamed from Data, `docs/prd/rename-data-page-to-connect.md`;
+the link-opens-the-page behavior itself is unaffected, AC-D15).
+
+**`/engine`** (Engine Page, `docs/prd/engine-page.md`, this slice) is a second weekly-cadence
+view, alongside Body's own Weekly Ledger: one row per ISO week, newest first, four columns —
+Strain, Recovery, HRV, RHR — the training driver and its recovery guardrails at the same
+cadence Body already established. It is computed by a wholly separate module
+(`lib/dashboard/engine.ts`) that never imports from or shares code with Body's own
+`lib/dashboard/ledger.ts` — each page re-derives its own weekly aggregation from scratch
+rather than one un-deleting the other's. Strain/HRV/RHR ship as plain neutral-tone deltas (no
+good/warning coloring this slice); Recovery shows the week's average plus a red-day count.
+`/daily`'s own Strain/Recovery/HRV/RHR rendering is unchanged — Engine is an additional view
+of the same underlying series, not a relocation.
 
 The hero stall badge is computed from completed Weekly Ledger rows, not daily streaks
 (DL-2026-07-19-b): a body-fat trend delta at or below −ε reads "trending down N wks", at or
