@@ -78,7 +78,7 @@ export function NavHeader({
               className={`ml-2 rounded-md px-3 py-1 text-sm ${
                 active === "fuel"
                   ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
-                  : "text-zinc-600 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-900"
+                  : "text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-900"
               }`}
             >
               Fuel
@@ -88,7 +88,7 @@ export function NavHeader({
               className={`rounded-md px-3 py-1 text-sm ${
                 active === "connect"
                   ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
-                  : "text-zinc-600 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-900"
+                  : "text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-900"
               }`}
             >
               Connect
