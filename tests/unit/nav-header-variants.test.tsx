@@ -32,14 +32,14 @@ describe("nav header variants (AC-AB2, NFR-61)", () => {
     expect(markup).not.toContain("About");
   });
 
-  it("AC-M39/NFR-61: the live variant shows exactly Body, Daily, Fuel, Connect in order, with no separate Targets or Log Meal link", () => {
+  it("AC-E10 (bare case): the live variant shows exactly Body, Engine, Fuel, Daily, Connect in order, with no separate Targets or Log Meal link", () => {
     const markup = renderToStaticMarkup(<NavHeader active="body" />);
-    // "/status" -> "/data" -> "/connect" (Data Page Redesign & Connect, PRD
-    // §1; Rename /data Page to /connect, PRD §1); "/settings/targets" +
-    // "/log-meal" -> merged into "/fuel" (Fuel, PRD §1): this is an
-    // ordinary, non-stub test (carries no DO-NOT-EDIT header), so its href
-    // list gets an ordinary update, not a PRD-authorized stub exception.
-    const hrefs = ["/body", "/daily", "/fuel", "/connect"];
+    // Amends AC-M39 in place (Engine, PRD §0 header): the five-item live
+    // order (Body, Engine, Fuel, Daily, Connect) replaces the prior
+    // four-item Body/Daily/Fuel/Connect order. This is an ordinary,
+    // non-stub test (carries no DO-NOT-EDIT header), so its href list gets
+    // an ordinary update, not a PRD-authorized stub exception.
+    const hrefs = ["/body", "/engine", "/fuel", "/daily", "/connect"];
     const indices = hrefs.map((href) => markup.indexOf(`href="${href}"`));
     for (const index of indices) {
       expect(index).toBeGreaterThan(-1);
@@ -58,6 +58,12 @@ describe("nav header variants (AC-AB2, NFR-61)", () => {
     const markup = renderToStaticMarkup(<NavHeader variant="demo" />);
     expect(markup).not.toContain('aria-current="page"');
   });
+
+  it("AC-E13: the demo variant renders no Engine link and no /demo/engine href anywhere in the markup", () => {
+    const markup = renderToStaticMarkup(<NavHeader variant="demo" />);
+    expect(markup).not.toContain("Engine");
+    expect(markup).not.toContain("/demo/engine");
+  });
 });
 
 // AC-D19/AC-D20 block retired in full (Fuel, PRD §0.2/§1): both asserted the
@@ -75,14 +81,16 @@ describe("nav header variants (AC-AB2, NFR-61)", () => {
  * Implementation code must be written to satisfy these stubs.
  * Editing stubs to fit implementation triggers a blocking finding in jerkai-falsify-diff.
  */
-describe("nav header active highlight — Connect, Fuel (AC-DS18, AC-M49, AC-DS20/AC-M40)", () => {
+describe("nav header active highlight — Connect, Fuel, Engine (AC-DS18, AC-M49, AC-E11, AC-DS20/AC-M40/AC-E12)", () => {
   // NavHeader's `active` prop is typed "weekly" | "daily" today; PRD §0.8
   // widens it to this exact union — casting to it here (rather than
   // `@ts-expect-error`) stays valid both before and after that widening ships,
   // so this stub never needs a build-time edit to its own type-check status.
   // Fuel (PRD §1) narrows+adds: "logmeal"/"targets" drop out, "fuel" replaces
   // them — the two merged routes share one highlight case now (AC-M49).
-  type ProspectiveActive = "body" | "daily" | "connect" | "fuel";
+  // Engine (PRD §1, this slice) widens the union again, a value edit under
+  // this file's own established "value edit vs. name groom" stub convention.
+  type ProspectiveActive = "body" | "daily" | "connect" | "fuel" | "engine";
   const ACTIVE_CLASSES = "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900";
 
   function linkMarkup(markup: string, href: string): string | null {
@@ -90,7 +98,7 @@ describe("nav header active highlight — Connect, Fuel (AC-DS18, AC-M49, AC-DS2
     return markup.match(new RegExp(`<a[^>]*href="${escaped}"[^>]*>`))?.[0] ?? null;
   }
 
-  it('AC-DS18: active="connect" highlights the Connect link (bg-zinc-900 text-white / dark:bg-zinc-100 dark:text-zinc-900) and no other link', () => {
+  it('AC-DS18/AC-E12: active="connect" highlights the Connect link (bg-zinc-900 text-white / dark:bg-zinc-100 dark:text-zinc-900) and no other link, including Engine', () => {
     const markup = renderToStaticMarkup(
       <NavHeader active={"connect" as ProspectiveActive} />,
     );
@@ -98,7 +106,7 @@ describe("nav header active highlight — Connect, Fuel (AC-DS18, AC-M49, AC-DS2
     const dataLink = linkMarkup(markup, "/connect");
     expect(dataLink).not.toBeNull();
     expect(dataLink).toContain(ACTIVE_CLASSES);
-    for (const href of ["/body", "/daily", "/fuel"]) {
+    for (const href of ["/body", "/daily", "/fuel", "/engine"]) {
       const link = linkMarkup(markup, href);
       expect(link).not.toBeNull();
       expect(link).not.toContain(ACTIVE_CLASSES);
@@ -108,24 +116,38 @@ describe("nav header active highlight — Connect, Fuel (AC-DS18, AC-M49, AC-DS2
   // AC-DS19 ("logmeal" highlight) and AC-DS21 ("targets" highlight) retired
   // in full (Fuel, PRD §0.2/§1) — replaced by one new case, AC-M49, since
   // both old nav targets are now the single /fuel link.
-  it('AC-M49: active="fuel" highlights the Fuel link and no other link', () => {
+  it('AC-M49/AC-E12: active="fuel" highlights the Fuel link and no other link, including Engine', () => {
     const markup = renderToStaticMarkup(
       <NavHeader active={"fuel" as ProspectiveActive} />,
     );
     const fuelLink = linkMarkup(markup, "/fuel");
     expect(fuelLink).not.toBeNull();
     expect(fuelLink).toContain(ACTIVE_CLASSES);
-    for (const href of ["/body", "/daily", "/connect"]) {
+    for (const href of ["/body", "/daily", "/connect", "/engine"]) {
       const link = linkMarkup(markup, href);
       expect(link).not.toBeNull();
       expect(link).not.toContain(ACTIVE_CLASSES);
     }
   });
 
-  it('AC-DS20/AC-M40 (regression, cross-page isolation): active="body" or active="daily" leaves Connect and Fuel in their non-active treatment, and Body/Daily\'s own existing active behavior is unchanged', () => {
+  it('AC-E11: active="engine" highlights the Engine link and no other link', () => {
+    const markup = renderToStaticMarkup(
+      <NavHeader active={"engine" as ProspectiveActive} />,
+    );
+    const engineLink = linkMarkup(markup, "/engine");
+    expect(engineLink).not.toBeNull();
+    expect(engineLink).toContain(ACTIVE_CLASSES);
+    for (const href of ["/body", "/daily", "/fuel", "/connect"]) {
+      const link = linkMarkup(markup, href);
+      expect(link).not.toBeNull();
+      expect(link).not.toContain(ACTIVE_CLASSES);
+    }
+  });
+
+  it('AC-DS20/AC-M40/AC-E12 (regression, cross-page isolation): active="body" or active="daily" leaves Connect, Fuel, and Engine in their non-active treatment, and Body/Daily\'s own existing active behavior is unchanged', () => {
     for (const active of ["body", "daily"] as const) {
       const markup = renderToStaticMarkup(<NavHeader active={active} />);
-      for (const href of ["/connect", "/fuel"]) {
+      for (const href of ["/connect", "/fuel", "/engine"]) {
         const link = linkMarkup(markup, href);
         expect(link).not.toBeNull();
         expect(link).not.toContain(ACTIVE_CLASSES);
