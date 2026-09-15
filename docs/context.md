@@ -9,7 +9,7 @@ A personal health dashboard, used by Albert and the friends he invites, that tur
 North star: **body fat % trend** (7-day and 30-day rolling average) as the decision signal — but the **raw daily reading is always shown alongside it, never hidden or replaced**. Raw = record of truth; trend = the lens for deciding whether anything changed.
 
 - **Energy balance** — *driver* — calories/macros vs target, from manual meal logging (Log
-  Meal, shipped: `/log-meal` + Settings → Targets, `docs/prd/archive/log-meal.md`,
+  Meal, shipped: `/fuel` (Log Meal + Targets), `docs/prd/archive/log-meal.md`,
   `docs/prd/edit-delete-meal.md`). JerkAI stores
   what's entered; it does not estimate macros — that happens outside the app.
 - **Training** — *driver* — **Whoop Day Strain (Cycle Strain, 0–21)**, from the Whoop API. NOT workout-log tonnage (tonnage is permanently not a dashboard metric).
@@ -34,7 +34,7 @@ one row per ISO week (Mon–Sun), three columns of deltas/states, newest week fi
 13 completed weeks plus the current in-progress week. It answers "how did my weeks go?" in
 one scan. **`/daily`** is the strip stack (below) — the drill-down surface opened from a
 ledger row, or directly for day-level co-movement investigation. Every page header carries
-Body/Daily nav plus Connect (renamed from Data, `docs/prd/rename-data-page-to-connect.md`,
+Body/Daily/Fuel nav plus Connect (renamed from Data, `docs/prd/rename-data-page-to-connect.md`,
 this slice; the link-opens-the-page behavior itself is unaffected, AC-D15).
 
 The hero stall badge is computed from completed Weekly Ledger rows, not daily streaks
@@ -81,13 +81,15 @@ hero stall badge shown here is the same one described above.
   (DL-pending-2). Each day resolves against whatever target was in force *that day*
   (`lib/targets.ts#resolveTargetForDate`), so a later target change never recolors history
   (DL-pending-3). A day with no logged entry is a gap, not a zero.
-- **"+ Log meal" header CTA is live** (`/log-meal`), per AC-D14's own terms — it returns
-  once its feature ships. **"+ Log workout" stays absent** until its slice ships.
+- **Fuel is the permanent nav tab hosting both Log Meal and Targets** (`/fuel`,
+  `docs/prd/fuel.md`) — a client-side View toggle switches between them, no separate nav
+  link or header CTA for either anymore; unlike the old "+ Log meal" CTA, Fuel does not
+  disappear/reappear by feature-flag. **"+ Log workout" stays absent** until its slice ships.
 
 ## Later, separate slices (not built here)
 - **Log Meal fast-follows:** edit/delete shipped (`docs/prd/edit-delete-meal.md`) — a
   logged meal can be corrected or removed in place, with the running total, the calories
-  strip, and scrub readouts recomputing immediately. The `/log-meal` entries list now
+  strip, and scrub readouts recomputing immediately. The Fuel page's Log Meal view now
   tracks whichever day the form's date field is set to, rather than only today
   (`docs/prd/date-scoped-entries-list.md`) — editing an entry onto a different day follows
   the list there so it stays reachable for further edit/delete. Still deferred: Favorites/Recents
