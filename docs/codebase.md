@@ -7,7 +7,7 @@ cite a fact instead of re-deriving it. It covers modules, data flow, conventions
 It deliberately does not cover product intent (`docs/context.md`), schema DDL or local setup
 (`README.md`), or process (`docs/definition-of-ready-and-done.md`).
 
-**Derived at:** commit `0dc2839` (branch `feat/fuel-page`, pre-merge), 2026-09-15.
+**Derived at:** commit `684eb2d` (branch `feat/engine-page`, pre-merge), 2026-09-15.
 
 **Staleness rule.** This is a snapshot of a moving target. A PRD citing it must re-verify
 the specific claims it leans on. Where a claim disagrees with the code, **the file is wrong
@@ -292,10 +292,12 @@ not in either checkout, so its ids are read from source, tests and commit subjec
 | `AC-ES` | jerkai | 6 | Resend Sending Domain Switch (`docs/prd/resend-sending-domain-switch.md`, this slice) |
 | `AC-MF` | jerkai-mcp | 9 | MCP metric registry, slice 1 (`AC-MF9`, the vendor drift check) |
 | `AC-DS` | jerkai | 25 | Data Page Redesign & Connect (`docs/prd/data-page-redesign-and-connect.md`); AC-DS22–AC-DS25 added by Rename /data Page to /connect (`docs/prd/rename-data-page-to-connect.md`, this slice) |
+| `AC-E` | jerkai | 14 | Engine Page (`docs/prd/engine-page.md`, this slice) |
 
 **NFR** is one ascending series **per repo**, not per-slice and not global across repos
-(DL-2026-07-31-a). In **jerkai** it is numeric, high-water mark **NFR-169** as of this slice
-(NFR-165–169, Fuel (Targets + Log Meal Merge), `docs/prd/fuel.md`; before it, high-water mark
+(DL-2026-07-31-a). In **jerkai** it is numeric, high-water mark **NFR-177** as of this slice
+(NFR-170–177, Engine Page, `docs/prd/engine-page.md`; before it, high-water mark was NFR-169
+(NFR-165–169, Fuel (Targets + Log Meal Merge), `docs/prd/fuel.md`); before it, high-water mark
 was NFR-164, NFR-160–164, Drop Strain and Recovery Columns from the Weekly Ledger,
 `docs/prd/drop-strain-and-recovery-columns.md`; before it, high-water mark was NFR-159,
 NFR-155–159, Rename Results Page to Body, `docs/prd/rename-results-page-to-body.md`;
