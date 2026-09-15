@@ -54,12 +54,14 @@ export function LogMealForm({
   onDateChange,
   onEditComplete,
   onMutationSuccess,
+  switchToTargets,
 }: {
   editEntry?: MealEntryRow | null;
   entryDate?: string | null;
   onDateChange?: (date: string) => void;
   onEditComplete?: () => void;
   onMutationSuccess?: (entryDate: string) => void;
+  switchToTargets?: () => void;
 } = {}) {
   const [state, formAction] = useActionState(
     editEntry ? updateMealEntryAction : logMealAction,
@@ -308,9 +310,9 @@ export function LogMealForm({
               <p className="mt-2 tabular-nums">{state.totals.calories} kcal logged</p>
               <p className="mt-1 text-zinc-500">
                 No target set yet —{" "}
-                <a href="/settings/targets" className="underline">
+                <button type="button" onClick={() => switchToTargets?.()} className="underline">
                   set targets
-                </a>
+                </button>
                 .
               </p>
             </>

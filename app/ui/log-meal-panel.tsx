@@ -41,6 +41,7 @@ export function LogMealPanel({ switchToTargets }: { switchToTargets?: () => void
           setEntryDate(savedDate);
           setRefreshToken((token) => token + 1);
         }}
+        switchToTargets={switchToTargets}
       />
       <FuelTotalCard entryDate={entryDate} refreshToken={refreshToken} switchToTargets={switchToTargets} />
       <MealEntriesList

@@ -321,6 +321,30 @@ describe("LogMealPanel", () => {
     await expectMealTypeChecked(CREATE_DEFAULT_LABEL);
   });
 
+  it("AC-M41 (fallback parity): the post-save card's 'set targets' fallback is a button that calls switchToTargets, not an <a href> to /settings/targets", async () => {
+    vi.mocked(actions.logMealAction).mockResolvedValue({
+      status: "success",
+      errors: [],
+      entryDate: TODAY,
+      totals: { calories: 300, proteinG: 10, carbsG: 20, fatG: 5, entryCount: 1 },
+      target: null,
+    });
+    const switchToTargets = vi.fn();
+
+    render(<LogMealPanel switchToTargets={switchToTargets} />);
+    await waitFor(() => expect(dateInputs()).toHaveLength(1));
+    fillCalories("300");
+    fireEvent.click(screen.getByText("Save"));
+
+    const setTargets = await screen.findByText("set targets");
+    expect(setTargets.tagName).toBe("BUTTON");
+    expect(setTargets.closest("a")).toBeNull();
+    expect(document.querySelector('a[href="/settings/targets"]')).toBeNull();
+
+    fireEvent.click(setTargets);
+    expect(switchToTargets).toHaveBeenCalled();
+  });
+
   it("AC-M35: cancelling an edit does not leak the edited entry's meal type into create mode", async () => {
     expect(CREATE_DEFAULT_MEAL_TYPE).not.toBe("dinner");
     vi.mocked(actions.listMealEntriesForDate).mockResolvedValue([makeEntry({ mealType: "dinner" })]);
