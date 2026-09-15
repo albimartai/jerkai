@@ -3,8 +3,8 @@
 import { useActionState, useEffect, useState } from "react";
 import { useFormStatus } from "react-dom";
 
-import { saveTargetAction } from "@/app/settings/targets/actions";
-import { initialSaveTargetState } from "@/app/settings/targets/action-state";
+import { saveTargetAction } from "@/app/fuel/actions";
+import { initialSaveTargetState } from "@/app/fuel/action-state";
 
 // AC-M10: kcal + protein required, carbs/fat optional; effective date defaults today.
 // Insert-only on the server — "saving" always means "starting a new effective period."
@@ -35,7 +35,7 @@ function SubmitButton({ ready }: { ready: boolean }) {
 const inputClass =
   "w-full rounded-md border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-950";
 
-export function TargetsForm() {
+export function TargetsForm({ onSaved }: { onSaved?: () => void } = {}) {
   const [state, formAction] = useActionState(saveTargetAction, initialSaveTargetState);
   const [effectiveDate, setEffectiveDate] = useState<string | null>(null);
 
@@ -45,9 +45,19 @@ export function TargetsForm() {
     setEffectiveDate(todayLocal());
   }, []);
 
+  // AC-M46: fires exactly once per successful save, not on every render — the
+  // state.status === "success" guard is what stops a keystroke-driven re-render (still on
+  // the same settled success state) from re-firing onSaved.
+  useEffect(() => {
+    if (state.status === "success") {
+      onSaved?.();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state]);
+
   return (
     <div className="space-y-4">
-      <h1 className="text-lg font-semibold tracking-tight">Settings · Targets</h1>
+      <h1 className="text-lg font-semibold tracking-tight">Macro targets</h1>
 
       <form action={formAction} className="space-y-4">
         <label className="block text-sm">

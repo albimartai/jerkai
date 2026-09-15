@@ -2,11 +2,11 @@ import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
 import { NavHeader } from "@/app/ui/nav-header";
-import { LogMealPanel } from "@/app/ui/log-meal-panel";
+import { FuelPanel } from "@/app/ui/fuel-panel";
 
 export const dynamic = "force-dynamic";
 
-export default async function LogMeal() {
+export default async function Fuel() {
   // proxy.ts already gates this route; re-checking here keeps writes behind a session even
   // if the proxy matcher ever regresses (same defense-in-depth as the other pages).
   const session = await auth();
@@ -16,8 +16,8 @@ export default async function LogMeal() {
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 pb-10 font-sans">
-      <NavHeader active="logmeal" />
-      <LogMealPanel />
+      <NavHeader active="fuel" />
+      <FuelPanel />
     </main>
   );
 }

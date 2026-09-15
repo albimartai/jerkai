@@ -3,8 +3,8 @@
 import { useActionState, useEffect, useState } from "react";
 import { useFormStatus } from "react-dom";
 
-import { initialEditMealState, initialLogMealState } from "@/app/log-meal/action-state";
-import { logMealAction, updateMealEntryAction } from "@/app/log-meal/actions";
+import { initialEditMealState, initialLogMealState } from "@/app/fuel/action-state";
+import { logMealAction, updateMealEntryAction } from "@/app/fuel/actions";
 import { DASHBOARD_CONFIG } from "@/lib/dashboard/config";
 import { defaultMealType, type MealType } from "@/lib/dashboard/meal-type";
 import type { MealEntryRow } from "@/lib/meal-entries";
@@ -54,12 +54,14 @@ export function LogMealForm({
   onDateChange,
   onEditComplete,
   onMutationSuccess,
+  switchToTargets,
 }: {
   editEntry?: MealEntryRow | null;
   entryDate?: string | null;
   onDateChange?: (date: string) => void;
   onEditComplete?: () => void;
   onMutationSuccess?: (entryDate: string) => void;
+  switchToTargets?: () => void;
 } = {}) {
   const [state, formAction] = useActionState(
     editEntry ? updateMealEntryAction : logMealAction,
@@ -308,9 +310,9 @@ export function LogMealForm({
               <p className="mt-2 tabular-nums">{state.totals.calories} kcal logged</p>
               <p className="mt-1 text-zinc-500">
                 No target set yet —{" "}
-                <a href="/settings/targets" className="underline">
+                <button type="button" onClick={() => switchToTargets?.()} className="underline">
                   set targets
-                </a>
+                </button>
                 .
               </p>
             </>

@@ -9,7 +9,8 @@ import {
   type DeleteMealState,
   type EditMealState,
   type LogMealState,
-} from "@/app/log-meal/action-state";
+  type SaveTargetState,
+} from "@/app/fuel/action-state";
 import { auth } from "@/auth";
 import {
   dailyTotals,
@@ -20,7 +21,8 @@ import {
   type MealEntryRow,
 } from "@/lib/meal-entries";
 import { validateMealEntryInput } from "@/lib/meal-entry-validation";
-import { resolveTargetForDate, fetchTargets } from "@/lib/targets";
+import { resolveTargetForDate, fetchTargets, saveTarget, type TargetRow } from "@/lib/targets";
+import { validateTargetInput } from "@/lib/target-validation";
 
 // Server Actions are POST endpoints reachable to anyone who can send the request, not just
 // through this form — auth is re-checked here even though the page is already gated
@@ -69,7 +71,7 @@ export async function logMealAction(
   // failure, so the response below is identical either way.
   await saveMealEntry({ ...validated.value, userId, idempotencyKey });
 
-  revalidatePath("/log-meal");
+  revalidatePath("/fuel");
   revalidatePath("/daily");
 
   const { entryDate } = validated.value;
@@ -135,7 +137,7 @@ export async function updateMealEntryAction(
     return { ...initialEditMealState, status: "error", errors: ["entry not found"] };
   }
 
-  revalidatePath("/log-meal");
+  revalidatePath("/fuel");
   revalidatePath("/daily");
 
   // AC-M19: revalidating /daily is sufficient for both the old and new day — it's
@@ -177,7 +179,7 @@ export async function deleteMealEntryAction(
   // error or a 500. AC-MU5: scoped by id AND userId.
   await deleteMealEntry(id, Number(session.user.id));
 
-  revalidatePath("/log-meal");
+  revalidatePath("/fuel");
   revalidatePath("/daily");
 
   return { status: "success", errors: [], deletedId: id };
@@ -191,4 +193,52 @@ export async function listMealEntriesForDate(entryDate: string): Promise<MealEnt
   const session = await auth();
   if (!session) return [];
   return fetchMealEntriesForDate(entryDate, Number(session.user.id));
+}
+
+// Fuel (PRD §1): a second call site for fetchTargets(), not a second implementation of
+// it — logMealAction/updateMealEntryAction above already call fetchTargets(userId)
+// internally to resolve the post-save target. Same auth-gate shape as
+// listMealEntriesForDate.
+export async function getTargetsForCurrentUser(): Promise<TargetRow[]> {
+  const session = await auth();
+  if (!session) return [];
+  return fetchTargets(Number(session.user.id));
+}
+
+// Merged from app/settings/targets/actions.ts (Fuel, PRD §1) — body unchanged except its
+// revalidatePath targets, which collapse from the two old routes into /fuel.
+export async function saveTargetAction(
+  _prevState: SaveTargetState,
+  formData: FormData,
+): Promise<SaveTargetState> {
+  const session = await auth();
+  if (!session) {
+    return { status: "error", errors: ["Unauthorized"] };
+  }
+
+  const field = (name: string) => {
+    const value = formData.get(name);
+    return typeof value === "string" ? value : null;
+  };
+
+  const validated = validateTargetInput({
+    effectiveDate: field("effectiveDate"),
+    caloriesTarget: field("caloriesTarget"),
+    proteinTargetG: field("proteinTargetG"),
+    carbsTargetG: field("carbsTargetG"),
+    fatTargetG: field("fatTargetG"),
+  });
+
+  if (!validated.ok) {
+    return { status: "error", errors: validated.errors };
+  }
+
+  // Insert-only (DL-pending-3): this never updates an existing row, so a day's history
+  // before the new effective date can never recolor.
+  await saveTarget({ ...validated.value, userId: Number(session.user.id) });
+
+  revalidatePath("/fuel");
+  revalidatePath("/daily");
+
+  return { status: "success", errors: [] };
 }

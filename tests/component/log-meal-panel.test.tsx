@@ -5,7 +5,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { LogMealPanel } from "@/app/ui/log-meal-panel";
-import * as actions from "@/app/log-meal/actions";
+import * as actions from "@/app/fuel/actions";
 import type { MealEntryRow } from "@/lib/meal-entries";
 import { DASHBOARD_CONFIG } from "@/lib/dashboard/config";
 import { defaultMealType, type MealType } from "@/lib/dashboard/meal-type";
@@ -14,11 +14,15 @@ import { defaultMealType, type MealType } from "@/lib/dashboard/meal-type";
 // component tests exercising DOM events + re-fetch/re-render, which the node-env unit tier
 // and string-match rendering can't express. Server actions are mocked — no DATABASE_URL.
 
-vi.mock("@/app/log-meal/actions", () => ({
+// getTargetsForCurrentUser (Fuel, PRD §1): LogMealPanel now renders FuelTotalCard
+// alongside the form/list, which reads this on mount — mocked here too so this file keeps
+// testing LogMealPanel as a standalone unit, unaware of /fuel as a route.
+vi.mock("@/app/fuel/actions", () => ({
   logMealAction: vi.fn(),
   updateMealEntryAction: vi.fn(),
   deleteMealEntryAction: vi.fn(),
   listMealEntriesForDate: vi.fn(),
+  getTargetsForCurrentUser: vi.fn(),
 }));
 
 const TODAY = "2026-07-21";
@@ -83,6 +87,7 @@ function fillCalories(value: string) {
 beforeEach(() => {
   vi.setSystemTime(new Date(`${TODAY}T12:00:00`));
   vi.mocked(actions.listMealEntriesForDate).mockResolvedValue([]);
+  vi.mocked(actions.getTargetsForCurrentUser).mockResolvedValue([]);
 });
 
 afterEach(() => {
@@ -195,17 +200,18 @@ describe("LogMealPanel", () => {
     // meal-entries-list.test.tsx): here the in-flight fetch belongs to the *pre-save* date,
     // and it's the save's onMutationSuccess snap — not a direct date-input change — that
     // moves entryDate while that fetch is still pending.
-    let todayCallCount = 0;
+    //
+    // Fuel's Total · Today card (PRD §0.3) independently calls listMealEntriesForDate(TODAY)
+    // alongside MealEntriesList, so a call-count threshold can't distinguish "the initial
+    // mount" from "the post-save refetch" — an explicit arm flag does, regardless of how
+    // many consumers call in on either side of it.
+    let staleModeArmed = false;
     const staleTodayFetch = deferred<MealEntryRow[]>();
     const earlierFetch = deferred<MealEntryRow[]>();
 
     vi.mocked(actions.listMealEntriesForDate).mockImplementation(async (date: string) => {
       if (date === TODAY) {
-        todayCallCount += 1;
-        // First call (initial mount) resolves immediately so the list — and its Edit
-        // button — render. A later call (triggered by the create-save's refreshToken
-        // bump below) is the one left deliberately pending.
-        return todayCallCount === 1 ? [makeEntry()] : staleTodayFetch.promise;
+        return staleModeArmed ? staleTodayFetch.promise : [makeEntry()];
       }
       return earlierFetch.promise;
     });
@@ -214,7 +220,8 @@ describe("LogMealPanel", () => {
     expect(await screen.findByText(/Oats/)).toBeTruthy();
 
     // A same-day create-save: onMutationSuccess(TODAY) makes setEntryDate a no-op, but the
-    // refreshToken bump still fires a second (this time pending) fetch for TODAY.
+    // refreshToken bump still fires a fresh (now-pending) fetch for TODAY from every
+    // consumer.
     vi.mocked(actions.logMealAction).mockResolvedValue({
       status: "success",
       errors: [],
@@ -222,10 +229,10 @@ describe("LogMealPanel", () => {
       totals: { calories: 700, proteinG: 30, carbsG: 70, fatG: 15, entryCount: 2 },
       target: null,
     });
+    staleModeArmed = true;
     fillCalories("300");
     fireEvent.click(screen.getByText("Save"));
     await waitFor(() => expect(actions.logMealAction).toHaveBeenCalled());
-    await waitFor(() => expect(todayCallCount).toBe(2));
 
     // Now, while that TODAY refetch is still pending, edit the (still-displayed, stale)
     // entry and save it onto an earlier day.
@@ -312,6 +319,30 @@ describe("LogMealPanel", () => {
   it("AC-M34: create mode's meal-type default is still computed from device-local time-of-day, unaffected by this fix", async () => {
     render(<LogMealPanel />);
     await expectMealTypeChecked(CREATE_DEFAULT_LABEL);
+  });
+
+  it("AC-M41 (fallback parity): the post-save card's 'set targets' fallback is a button that calls switchToTargets, not an <a href> to /settings/targets", async () => {
+    vi.mocked(actions.logMealAction).mockResolvedValue({
+      status: "success",
+      errors: [],
+      entryDate: TODAY,
+      totals: { calories: 300, proteinG: 10, carbsG: 20, fatG: 5, entryCount: 1 },
+      target: null,
+    });
+    const switchToTargets = vi.fn();
+
+    render(<LogMealPanel switchToTargets={switchToTargets} />);
+    await waitFor(() => expect(dateInputs()).toHaveLength(1));
+    fillCalories("300");
+    fireEvent.click(screen.getByText("Save"));
+
+    const setTargets = await screen.findByText("set targets");
+    expect(setTargets.tagName).toBe("BUTTON");
+    expect(setTargets.closest("a")).toBeNull();
+    expect(document.querySelector('a[href="/settings/targets"]')).toBeNull();
+
+    fireEvent.click(setTargets);
+    expect(switchToTargets).toHaveBeenCalled();
   });
 
   it("AC-M35: cancelling an edit does not leak the edited entry's meal type into create mode", async () => {

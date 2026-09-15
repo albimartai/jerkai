@@ -80,6 +80,12 @@ describe("proxy matcher", () => {
     // stay gated, same discipline as /privacy$.
     "/demography",
     "/demo-anything",
+    // AC-M37 (Fuel, PRD §1): the two routes merged/hard-removed into /fuel
+    // still resolve to nothing on disk, but proxy.ts's session gate must
+    // still run first — an unauthenticated visitor is redirected to /signin
+    // exactly as before, not handed a raw 404 before auth is even checked.
+    "/log-meal",
+    "/settings/targets",
   ])("keeps %s behind the session gate", (pathname) => {
     expect(gated(pathname)).toBe(true);
   });

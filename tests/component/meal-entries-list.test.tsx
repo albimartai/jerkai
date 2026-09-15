@@ -3,13 +3,13 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { MealEntriesList } from "@/app/ui/meal-entries-list";
-import * as actions from "@/app/log-meal/actions";
+import * as actions from "@/app/fuel/actions";
 import type { MealEntryRow } from "@/lib/meal-entries";
 
 // Date-Scoped Entries List (docs/prd/date-scoped-entries-list.md), NFR-44: MealEntriesList
 // mounted directly, controlled — the `entryDate` prop drives which day it queries.
 
-vi.mock("@/app/log-meal/actions", () => ({
+vi.mock("@/app/fuel/actions", () => ({
   deleteMealEntryAction: vi.fn(),
   listMealEntriesForDate: vi.fn(),
 }));

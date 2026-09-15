@@ -7,7 +7,7 @@ cite a fact instead of re-deriving it. It covers modules, data flow, conventions
 It deliberately does not cover product intent (`docs/context.md`), schema DDL or local setup
 (`README.md`), or process (`docs/definition-of-ready-and-done.md`).
 
-**Derived at:** commit `a15e4e4` (branch `feat/drop-strain-recovery-columns`, pre-merge), 2026-09-14.
+**Derived at:** commit `0dc2839` (branch `feat/fuel-page`, pre-merge), 2026-09-15.
 
 **Staleness rule.** This is a snapshot of a moving target. A PRD citing it must re-verify
 the specific claims it leans on. Where a claim disagrees with the code, **the file is wrong
@@ -90,6 +90,9 @@ means a colocated `lib/**/*.test.ts`; tests living under `tests/` are named inst
 | `ui/nav-header.tsx` | Shared header; `navVariant` switches the demo nav |
 | `ui/log-meal-form.tsx` | `"use client"`; also exports **`todayLocal()`**, the device-local today used app-wide |
 | `ui/log-meal-panel.tsx`, `ui/meal-entries-list.tsx`, `ui/targets-form.tsx` | Client components driving the Server Actions via `useActionState` |
+| `ui/fuel-panel.tsx` | `"use client"`; owns the `/fuel` page's Log meal/Targets View toggle (`role="radiogroup"`), rendering `LogMealPanel` and `FuelTargetsPanel` both kept mounted (hidden via the `hidden` attribute, not conditionally unmounted) so neither view's state resets on toggle (Fuel, this slice) |
+| `ui/fuel-total-card.tsx` | `"use client"`; the persistent "Total · Today" card — its own independent `listMealEntriesForDate`/`getTargetsForCurrentUser` read, deliberately duplicating `MealEntriesList`'s fetch rather than restructuring it (Fuel §0.3, this slice) |
+| `ui/fuel-targets-panel.tsx`, `ui/targets-history.tsx` | Client components for the Targets view — the always-visible `TargetsForm` plus a newest-first history table (Fuel, this slice) |
 | `api/ingest/health/route.ts` | `POST`; `x-api-key` compared with hashed `timingSafeEqual` |
 | `api/whoop/sync/route.ts` | `GET`; Vercel Cron target, `CRON_SECRET` bearer, `maxDuration = 60` |
 | `api/whoop/connect` / `callback` | OAuth start (stays session-gated) and redirect target (state-cookie gated); `callback` declares `maxDuration = 60` and fires `triggerBackfill()` on a true first connect (`isFirstConnect`, Whoop Historical Backfill on First Connect, this slice) |
@@ -130,17 +133,20 @@ and either can be null/empty regardless of the other).
 **Render.** `/` and `/body` → `fetchDashboardData(90, userId)` → `buildWeeklyView` → `WeeklyLedger`.
 `/daily` → `fetchDashboardData(90, userId)` plus the sibling `fetchTargets()` +
 `fetchCalorieSeries(axis, targets)` → `Dashboard`. The 30/90 toggle and the hover crosshair
-re-render client-side from data already held — no second fetch. All six gated pages (`/`,
-`/daily`, `/body`, `/log-meal`, `/settings/targets`, `/connect`) are
+re-render client-side from data already held — no second fetch. All five gated pages (`/`,
+`/daily`, `/body`, `/fuel`, `/connect`) are
 `export const dynamic = "force-dynamic"` and re-check `auth()` themselves. (`/status` and
 `/data` are now both plain `redirect("/connect")` stubs — no data fetch, no auth re-check of
 their own, `docs/prd/rename-data-page-to-connect.md` AC-DS23/AC-DS24, amending AC-DS2 from
-`docs/prd/data-page-redesign-and-connect.md` in place.)
+`docs/prd/data-page-redesign-and-connect.md` in place. `/log-meal` and `/settings/targets`
+merged into `/fuel` — hard-removed, no stub, `docs/prd/fuel.md`, this slice.)
 
-**Meal write.** `logMealAction` / `updateMealEntryAction` / `deleteMealEntryAction` in
-`app/log-meal/actions.ts`: re-check `auth()` → validate → write → `revalidatePath("/log-meal")`
-and `revalidatePath("/daily")` → return totals + resolved target. Nothing derived is ever
-written back; totals, bar colors and trends are recomputed at render time from the rows.
+**Meal write.** `logMealAction` / `updateMealEntryAction` / `deleteMealEntryAction` /
+`saveTargetAction` / `getTargetsForCurrentUser` in `app/fuel/actions.ts` (merged from
+`app/log-meal/actions.ts` + `app/settings/targets/actions.ts`, this slice): re-check `auth()`
+→ validate → write → `revalidatePath("/fuel")` and `revalidatePath("/daily")` → return totals
++ resolved target. Nothing derived is ever written back; totals, bar colors and trends are
+recomputed at render time from the rows.
 
 **Demo.** `/demo/*` reads `lib/demo/synthetic-data.ts` and calls the same pure
 `buildWeeklyView` / `buildCalorieSeries`, never `fetchDashboardData` or `lib/db.ts`.
@@ -230,8 +236,8 @@ The `demo.jerkai.app` host rewrite happens **inside** `proxy()`'s body, before `
 `next.config.js` rewrites. `tests/unit/proxy-matcher.test.ts` covers the matcher.
 
 **A `"use server"` file may only export async functions.** Adding a constant or type to
-`app/log-meal/actions.ts` fails at runtime, not at build; that is why
-`app/log-meal/action-state.ts` exists.
+`app/fuel/actions.ts` fails at runtime, not at build; that is why
+`app/fuel/action-state.ts` exists.
 
 **`lib/dashboard/types.ts` and `strain.ts` have an out-of-repo consumer, and its drift
 check will not catch you.** *Assumption:* these are internal modules, free to refactor like
@@ -271,7 +277,7 @@ not in either checkout, so its ids are read from source, tests and commit subjec
 | `AC-D` | jerkai | 21 | v1 dashboard (`docs/prd/archive/v1-dashboard.md`; carried forward unchanged by v1.1; AC-D18–AC-D21 added by Nav Header Cleanup & Status Page Chrome) |
 | `AC-N` | jerkai | 14 | v1.1 dashboard |
 | `AC-W` | jerkai | 36 | Weekly Ledger (`docs/prd/archive/weekly-ledger.md`; AC-W13–AC-W15 added by Weekly Ledger Week Column Wrap, `docs/prd/weekly-ledger-week-column-wrap.md`); AC-W16–AC-W23 added by Rename Weekly Page to Results (`docs/prd/rename-weekly-page-to-results.md`); AC-W24–AC-W31 added by Rename Results Page to Body (`docs/prd/rename-results-page-to-body.md`); AC-W32–AC-W36 added by Drop Strain and Recovery Columns from the Weekly Ledger (`docs/prd/drop-strain-and-recovery-columns.md`, this slice) |
-| `AC-M` | jerkai | 35 | Log Meal and its fast-follows |
+| `AC-M` | jerkai | 49 | Log Meal and its fast-follows; AC-M36–AC-M49 added by Fuel (Targets + Log Meal Merge) (`docs/prd/fuel.md`, this slice) |
 | `AC-PD` | jerkai | 7 | Public Demo |
 | `AC-AB` | jerkai | 9 | Demo About |
 | `AC-AU` | jerkai | 7 | Extend Sign-In Allowlist (`docs/prd/extend-signin-allowlist.md`) |
@@ -288,8 +294,9 @@ not in either checkout, so its ids are read from source, tests and commit subjec
 | `AC-DS` | jerkai | 25 | Data Page Redesign & Connect (`docs/prd/data-page-redesign-and-connect.md`); AC-DS22–AC-DS25 added by Rename /data Page to /connect (`docs/prd/rename-data-page-to-connect.md`, this slice) |
 
 **NFR** is one ascending series **per repo**, not per-slice and not global across repos
-(DL-2026-07-31-a). In **jerkai** it is numeric, high-water mark **NFR-164** as of this slice
-(NFR-160–164, Drop Strain and Recovery Columns from the Weekly Ledger,
+(DL-2026-07-31-a). In **jerkai** it is numeric, high-water mark **NFR-169** as of this slice
+(NFR-165–169, Fuel (Targets + Log Meal Merge), `docs/prd/fuel.md`; before it, high-water mark
+was NFR-164, NFR-160–164, Drop Strain and Recovery Columns from the Weekly Ledger,
 `docs/prd/drop-strain-and-recovery-columns.md`; before it, high-water mark was NFR-159,
 NFR-155–159, Rename Results Page to Body, `docs/prd/rename-results-page-to-body.md`;
 before it, high-water mark was NFR-154, NFR-150–154, Rename Weekly Page to Results, `docs/prd/rename-weekly-page-to-results.md`;
