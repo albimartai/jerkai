@@ -35,7 +35,7 @@ const LIVE_NAV_ITEMS: ReadonlyArray<{ label: string; href: string; active: LiveA
   { label: "Body", href: "/body", active: "body", ariaCurrent: true },
   { label: "Engine", href: "/engine", active: "engine", ariaCurrent: false },
   { label: "Fuel", href: "/fuel", active: "fuel", ariaCurrent: false },
-  { label: "Daily", href: "/daily", active: "daily", ariaCurrent: false },
+  { label: "Daily", href: "/daily", active: "daily", ariaCurrent: true },
   { label: "Connect", href: "/connect", active: "connect", ariaCurrent: false },
 ];
 

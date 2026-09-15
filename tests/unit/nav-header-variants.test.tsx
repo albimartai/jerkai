@@ -54,6 +54,13 @@ describe("nav header variants (AC-AB2, NFR-61)", () => {
     expect(markup).toContain('aria-current="page"');
   });
 
+  it('regression: active="daily" (live) still carries aria-current="page" on the Daily link, matching Body\'s own', () => {
+    const markup = renderToStaticMarkup(<NavHeader active="daily" />);
+    const dailyLink = markup.match(/<a[^>]*href="\/daily"[^>]*>/)?.[0] ?? null;
+    expect(dailyLink).not.toBeNull();
+    expect(dailyLink).toContain('aria-current="page"');
+  });
+
   it("AC-AB5: with no active prop, neither resolution link renders as active", () => {
     const markup = renderToStaticMarkup(<NavHeader variant="demo" />);
     expect(markup).not.toContain('aria-current="page"');
