@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { FuelPanel } from "@/app/ui/fuel-panel";
@@ -60,6 +60,13 @@ function makeTarget(overrides: Partial<TargetRow> = {}): TargetRow {
   };
 }
 
+// Scoped to the View radiogroup specifically — LogMealForm's own meal-type selector also
+// renders native role="radio" inputs, so an unscoped getAllByRole("radio") would count
+// those too.
+function viewGroup() {
+  return within(screen.getByRole("radiogroup", { name: /view/i }));
+}
+
 beforeEach(() => {
   vi.setSystemTime(new Date(`${TODAY}T12:00:00`));
   vi.mocked(actions.listMealEntriesForDate).mockResolvedValue([]);
@@ -75,27 +82,27 @@ afterEach(() => {
 describe("FuelPanel — View toggle (AC-M38)", () => {
   it("AC-M38 (bare case): on mount, the radiogroup shows exactly one checked option — Log meal — and renders the Log Meal view", async () => {
     render(<FuelPanel />);
-    await waitFor(() => expect(screen.getAllByRole("radio")).toHaveLength(2));
+    await waitFor(() => expect(viewGroup().getAllByRole("radio")).toHaveLength(2));
 
-    expect(screen.getByRole("radiogroup")).toBeTruthy();
-    const logOption = screen.getByRole("radio", { name: /log meal/i });
-    const targetsOption = screen.getByRole("radio", { name: /targets/i });
+    expect(screen.getByRole("radiogroup", { name: /view/i })).toBeTruthy();
+    const logOption = viewGroup().getByRole("radio", { name: /log meal/i });
+    const targetsOption = viewGroup().getByRole("radio", { name: /targets/i });
     expect(logOption.getAttribute("aria-checked")).toBe("true");
     expect(targetsOption.getAttribute("aria-checked")).toBe("false");
   });
 
   it("AC-M38: clicking the Targets option shows the Targets view with no route change, and mutual exclusivity holds (never both, never neither)", async () => {
     render(<FuelPanel />);
-    await waitFor(() => expect(screen.getAllByRole("radio")).toHaveLength(2));
+    await waitFor(() => expect(viewGroup().getAllByRole("radio")).toHaveLength(2));
 
-    fireEvent.click(screen.getByRole("radio", { name: /targets/i }));
+    fireEvent.click(viewGroup().getByRole("radio", { name: /targets/i }));
 
     await waitFor(() =>
-      expect(screen.getByRole("radio", { name: /targets/i }).getAttribute("aria-checked")).toBe("true"),
+      expect(viewGroup().getByRole("radio", { name: /targets/i }).getAttribute("aria-checked")).toBe("true"),
     );
-    expect(screen.getByRole("radio", { name: /log meal/i }).getAttribute("aria-checked")).toBe("false");
+    expect(viewGroup().getByRole("radio", { name: /log meal/i }).getAttribute("aria-checked")).toBe("false");
 
-    const checkedCount = screen
+    const checkedCount = viewGroup()
       .getAllByRole("radio")
       .filter((el) => el.getAttribute("aria-checked") === "true").length;
     expect(checkedCount).toBe(1);
@@ -105,21 +112,21 @@ describe("FuelPanel — View toggle (AC-M38)", () => {
     vi.mocked(actions.listMealEntriesForDate).mockResolvedValue([makeEntry()]);
 
     render(<FuelPanel />);
-    await waitFor(() => expect(screen.getAllByRole("radio")).toHaveLength(2));
+    await waitFor(() => expect(viewGroup().getAllByRole("radio")).toHaveLength(2));
 
     const dateInput = await screen.findByDisplayValue(TODAY);
     fireEvent.change(dateInput, { target: { value: EARLIER } });
     await waitFor(() => expect(actions.listMealEntriesForDate).toHaveBeenLastCalledWith(EARLIER));
 
-    fireEvent.click(screen.getByRole("radio", { name: /targets/i }));
+    fireEvent.click(viewGroup().getByRole("radio", { name: /targets/i }));
     await waitFor(() =>
-      expect(screen.getByRole("radio", { name: /targets/i }).getAttribute("aria-checked")).toBe("true"),
+      expect(viewGroup().getByRole("radio", { name: /targets/i }).getAttribute("aria-checked")).toBe("true"),
     );
 
     const callsBeforeReturn = vi.mocked(actions.listMealEntriesForDate).mock.calls.length;
-    fireEvent.click(screen.getByRole("radio", { name: /log meal/i }));
+    fireEvent.click(viewGroup().getByRole("radio", { name: /log meal/i }));
     await waitFor(() =>
-      expect(screen.getByRole("radio", { name: /log meal/i }).getAttribute("aria-checked")).toBe("true"),
+      expect(viewGroup().getByRole("radio", { name: /log meal/i }).getAttribute("aria-checked")).toBe("true"),
     );
 
     expect(await screen.findByDisplayValue(EARLIER)).toBeTruthy();
@@ -129,12 +136,12 @@ describe("FuelPanel — View toggle (AC-M38)", () => {
 
   it("NFR-167: the view toggle itself fires no Server Action call", async () => {
     render(<FuelPanel />);
-    await waitFor(() => expect(screen.getAllByRole("radio")).toHaveLength(2));
+    await waitFor(() => expect(viewGroup().getAllByRole("radio")).toHaveLength(2));
     vi.clearAllMocks();
 
-    fireEvent.click(screen.getByRole("radio", { name: /targets/i }));
+    fireEvent.click(viewGroup().getByRole("radio", { name: /targets/i }));
     await waitFor(() =>
-      expect(screen.getByRole("radio", { name: /targets/i }).getAttribute("aria-checked")).toBe("true"),
+      expect(viewGroup().getByRole("radio", { name: /targets/i }).getAttribute("aria-checked")).toBe("true"),
     );
 
     expect(actions.logMealAction).not.toHaveBeenCalled();
@@ -158,7 +165,7 @@ describe("FuelPanel — Total · Today vs. post-save card agreement (NFR-166)", 
     });
 
     render(<FuelPanel />);
-    await waitFor(() => expect(screen.getAllByRole("radio")).toHaveLength(2));
+    await waitFor(() => expect(viewGroup().getAllByRole("radio")).toHaveLength(2));
 
     const caloriesInput = document.querySelector('input[name="calories"]') as HTMLInputElement;
     fireEvent.change(caloriesInput, { target: { value: "500" } });

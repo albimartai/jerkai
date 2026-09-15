@@ -14,11 +14,15 @@ import { defaultMealType, type MealType } from "@/lib/dashboard/meal-type";
 // component tests exercising DOM events + re-fetch/re-render, which the node-env unit tier
 // and string-match rendering can't express. Server actions are mocked — no DATABASE_URL.
 
+// getTargetsForCurrentUser (Fuel, PRD §1): LogMealPanel now renders FuelTotalCard
+// alongside the form/list, which reads this on mount — mocked here too so this file keeps
+// testing LogMealPanel as a standalone unit, unaware of /fuel as a route.
 vi.mock("@/app/fuel/actions", () => ({
   logMealAction: vi.fn(),
   updateMealEntryAction: vi.fn(),
   deleteMealEntryAction: vi.fn(),
   listMealEntriesForDate: vi.fn(),
+  getTargetsForCurrentUser: vi.fn(),
 }));
 
 const TODAY = "2026-07-21";
@@ -83,6 +87,7 @@ function fillCalories(value: string) {
 beforeEach(() => {
   vi.setSystemTime(new Date(`${TODAY}T12:00:00`));
   vi.mocked(actions.listMealEntriesForDate).mockResolvedValue([]);
+  vi.mocked(actions.getTargetsForCurrentUser).mockResolvedValue([]);
 });
 
 afterEach(() => {
@@ -195,17 +200,18 @@ describe("LogMealPanel", () => {
     // meal-entries-list.test.tsx): here the in-flight fetch belongs to the *pre-save* date,
     // and it's the save's onMutationSuccess snap — not a direct date-input change — that
     // moves entryDate while that fetch is still pending.
-    let todayCallCount = 0;
+    //
+    // Fuel's Total · Today card (PRD §0.3) independently calls listMealEntriesForDate(TODAY)
+    // alongside MealEntriesList, so a call-count threshold can't distinguish "the initial
+    // mount" from "the post-save refetch" — an explicit arm flag does, regardless of how
+    // many consumers call in on either side of it.
+    let staleModeArmed = false;
     const staleTodayFetch = deferred<MealEntryRow[]>();
     const earlierFetch = deferred<MealEntryRow[]>();
 
     vi.mocked(actions.listMealEntriesForDate).mockImplementation(async (date: string) => {
       if (date === TODAY) {
-        todayCallCount += 1;
-        // First call (initial mount) resolves immediately so the list — and its Edit
-        // button — render. A later call (triggered by the create-save's refreshToken
-        // bump below) is the one left deliberately pending.
-        return todayCallCount === 1 ? [makeEntry()] : staleTodayFetch.promise;
+        return staleModeArmed ? staleTodayFetch.promise : [makeEntry()];
       }
       return earlierFetch.promise;
     });
@@ -214,7 +220,8 @@ describe("LogMealPanel", () => {
     expect(await screen.findByText(/Oats/)).toBeTruthy();
 
     // A same-day create-save: onMutationSuccess(TODAY) makes setEntryDate a no-op, but the
-    // refreshToken bump still fires a second (this time pending) fetch for TODAY.
+    // refreshToken bump still fires a fresh (now-pending) fetch for TODAY from every
+    // consumer.
     vi.mocked(actions.logMealAction).mockResolvedValue({
       status: "success",
       errors: [],
@@ -222,10 +229,10 @@ describe("LogMealPanel", () => {
       totals: { calories: 700, proteinG: 30, carbsG: 70, fatG: 15, entryCount: 2 },
       target: null,
     });
+    staleModeArmed = true;
     fillCalories("300");
     fireEvent.click(screen.getByText("Save"));
     await waitFor(() => expect(actions.logMealAction).toHaveBeenCalled());
-    await waitFor(() => expect(todayCallCount).toBe(2));
 
     // Now, while that TODAY refetch is still pending, edit the (still-displayed, stale)
     // entry and save it onto an earlier day.
