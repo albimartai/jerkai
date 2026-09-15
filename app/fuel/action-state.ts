@@ -46,3 +46,11 @@ export const initialDeleteMealState: DeleteMealState = {
   errors: [],
   deletedId: null,
 };
+
+// Merged from app/settings/targets/action-state.ts (Fuel, PRD §1) — unchanged.
+export type SaveTargetState = {
+  status: "idle" | "success" | "error";
+  errors: string[];
+};
+
+export const initialSaveTargetState: SaveTargetState = { status: "idle", errors: [] };

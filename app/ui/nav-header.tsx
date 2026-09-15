@@ -6,9 +6,9 @@ import Link from "next/link";
 
 // `variant="demo"` (docs/prd/public-demo.md, AC-PD4) renders on the public
 // demo surface: the resolution links point at the demo's own /demo/body
-// and /demo/daily paths (never the gated real routes), and Targets/
-// "+ Log meal"/Connect — every write-adjacent or gated link — are omitted
-// entirely, not disabled. Default "live" is today's unchanged behavior.
+// and /demo/daily paths (never the gated real routes), and Fuel/Connect —
+// every write-adjacent or gated link — are omitted entirely, not disabled.
+// Default "live" is today's unchanged behavior.
 type NavVariant = "live" | "demo";
 
 function resolutionHref(label: "Body" | "Daily", variant: NavVariant): string {
@@ -19,14 +19,14 @@ function resolutionHref(label: "Body" | "Daily", variant: NavVariant): string {
 const RESOLUTION_LABELS = ["Body", "Daily"] as const;
 
 // `active` widens additively (Data Page Redesign & Connect, §0.8) from the original
-// Body/Daily resolution pair to all five live-variant links — Connect, Log Meal, and
-// Targets now participate in the identical highlight mechanism Body/Daily already used,
-// with no new color or font (NFR-129/NFR-130). `undefined` still highlights nothing.
+// Body/Daily resolution pair to all live-variant links — Connect and Fuel now participate
+// in the identical highlight mechanism Body/Daily already used, with no new color or font
+// (NFR-129/NFR-130). `undefined` still highlights nothing.
 export function NavHeader({
   active,
   variant = "live",
 }: {
-  active?: "body" | "daily" | "connect" | "logmeal" | "targets";
+  active?: "body" | "daily" | "connect" | "fuel";
   variant?: NavVariant;
 } = {}) {
   return (
@@ -65,34 +65,23 @@ export function NavHeader({
           </Link>
         ) : (
           <>
-            {/* Log Meal ships in this slice (AC-M13) — the CTA returns per AC-D14's own
-                terms. "+ Log workout" stays absent (its slice hasn't shipped). Targets,
-                Log Meal, and Connect (renamed from Data) each carry the same active-highlight
-                ternary Body/Daily already use (AC-DS18/AC-DS19/AC-DS21, §0.8) — the
-                zinc/emerald-consistent bg-zinc-900/dark:bg-zinc-100 formula, never a new
-                color. No aria-current here (unlike Body/Daily, pre-existing): AC-D18's
-                DO NOT EDIT test asserts /connect renders with zero aria-current="page"
-                anywhere, and the PRD's own AC-DS18/19/21 text specifies only the visual
-                treatment, not an aria-current claim. */}
+            {/* Fuel (Log Meal + Targets merged, this slice) and Connect (renamed from
+                Data) each carry the same active-highlight ternary Body/Daily already use
+                (AC-M49, AC-DS18, §0.8) — the zinc/emerald-consistent
+                bg-zinc-900/dark:bg-zinc-100 formula, never a new color. No aria-current
+                here (unlike Body/Daily, pre-existing): AC-D18's DO NOT EDIT test asserts
+                /connect renders with zero aria-current="page" anywhere, and AC-M49/
+                AC-DS18's own text specifies only the visual treatment, not an
+                aria-current claim. */}
             <Link
-              href="/settings/targets"
-              className={`ml-2 rounded-md px-2 py-1 text-sm ${
-                active === "targets"
-                  ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
-                  : "text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-900"
-              }`}
-            >
-              Targets
-            </Link>
-            <Link
-              href="/log-meal"
-              className={`rounded-md px-3 py-1 text-sm ${
-                active === "logmeal"
+              href="/fuel"
+              className={`ml-2 rounded-md px-3 py-1 text-sm ${
+                active === "fuel"
                   ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
                   : "text-zinc-600 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-900"
               }`}
             >
-              Log Meal
+              Fuel
             </Link>
             <Link
               href="/connect"

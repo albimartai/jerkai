@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { FuelTotalCard } from "@/app/ui/fuel-total-card";
 import { LogMealForm, todayLocal } from "@/app/ui/log-meal-form";
 import { MealEntriesList } from "@/app/ui/meal-entries-list";
 import type { MealEntryRow } from "@/lib/meal-entries";
@@ -13,7 +14,7 @@ import type { MealEntryRow } from "@/lib/meal-entries";
 // Date-Scoped Entries List (docs/prd/date-scoped-entries-list.md, AC-M25/NFR-40): this
 // panel is also the page's single date owner. The form and list both read `entryDate` as a
 // controlled prop instead of each independently seeding `todayLocal()` on mount.
-export function LogMealPanel() {
+export function LogMealPanel({ switchToTargets }: { switchToTargets?: () => void } = {}) {
   const [editEntry, setEditEntry] = useState<MealEntryRow | null>(null);
   const [refreshToken, setRefreshToken] = useState(0);
   const [entryDate, setEntryDate] = useState<string | null>(null);
@@ -41,6 +42,7 @@ export function LogMealPanel() {
           setRefreshToken((token) => token + 1);
         }}
       />
+      <FuelTotalCard entryDate={entryDate} refreshToken={refreshToken} switchToTargets={switchToTargets} />
       <MealEntriesList
         entryDate={entryDate}
         refreshToken={refreshToken}
