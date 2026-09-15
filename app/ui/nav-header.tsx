@@ -1,14 +1,15 @@
 import Link from "next/link";
 
-// Shared header, routes named by resolution (AC-W8): Body (`/body`,
-// default landing) and Daily (`/daily`, the strip-stack drill-down). Connect
-// behavior is unchanged (AC-D15).
+// Shared header. `active` spans all five live-variant links (Body, Engine,
+// Fuel, Daily, Connect) — originally just the Body/Daily resolution pair
+// (AC-W8), widened additively as Connect, Fuel, and now Engine each joined
+// the same highlight mechanism. Connect behavior is unchanged (AC-D15).
 
 // `variant="demo"` (docs/prd/public-demo.md, AC-PD4) renders on the public
 // demo surface: the resolution links point at the demo's own /demo/body
-// and /demo/daily paths (never the gated real routes), and Fuel/Connect —
-// every write-adjacent or gated link — are omitted entirely, not disabled.
-// Default "live" is today's unchanged behavior.
+// and /demo/daily paths (never the gated real routes), and every
+// write-adjacent or gated link — Engine included (AC-E13) — is omitted
+// entirely, not disabled. Default "live" is today's unchanged behavior.
 type NavVariant = "live" | "demo";
 
 function resolutionHref(label: "Body" | "Daily", variant: NavVariant): string {
@@ -16,84 +17,87 @@ function resolutionHref(label: "Body" | "Daily", variant: NavVariant): string {
   return variant === "demo" ? `/demo/${path}` : `/${path}`;
 }
 
+// Demo-only: the demo variant's own Body/Daily pair, rendered via its own
+// map so the live variant's five-item restructure below (AC-E10) never
+// touches what /demo/body and /demo/daily already emit (§0.6 landmine).
 const RESOLUTION_LABELS = ["Body", "Daily"] as const;
 
-// `active` widens additively (Data Page Redesign & Connect, §0.8) from the original
-// Body/Daily resolution pair to all live-variant links — Connect and Fuel now participate
-// in the identical highlight mechanism Body/Daily already used, with no new color or font
-// (NFR-129/NFR-130). `undefined` still highlights nothing.
+type LiveActive = "body" | "engine" | "fuel" | "daily" | "connect";
+
+// The five live-variant links, in nav order (AC-E10: Body, Engine, Fuel,
+// Daily, Connect) — one ordered list rendered by a single .map(), so a
+// future sixth item is one list entry rather than a new hardcoded branch.
+// `ariaCurrent: true` marks Body/Daily's pre-existing aria-current="page"
+// behavior; Engine/Fuel/Connect carry none, matching Fuel/Connect's
+// existing precedent (AC-D18's DO NOT EDIT test asserts /connect renders
+// with zero aria-current="page" anywhere).
+const LIVE_NAV_ITEMS: ReadonlyArray<{ label: string; href: string; active: LiveActive; ariaCurrent: boolean }> = [
+  { label: "Body", href: "/body", active: "body", ariaCurrent: true },
+  { label: "Engine", href: "/engine", active: "engine", ariaCurrent: false },
+  { label: "Fuel", href: "/fuel", active: "fuel", ariaCurrent: false },
+  { label: "Daily", href: "/daily", active: "daily", ariaCurrent: false },
+  { label: "Connect", href: "/connect", active: "connect", ariaCurrent: false },
+];
+
 export function NavHeader({
   active,
   variant = "live",
 }: {
-  active?: "body" | "daily" | "connect" | "fuel";
+  active?: "body" | "daily" | "connect" | "fuel" | "engine";
   variant?: NavVariant;
 } = {}) {
   return (
     <header className="flex items-center justify-between py-4">
       <span className="text-lg font-semibold tracking-tight">JerkAI</span>
       <nav className="flex items-center gap-1" aria-label="Dashboard resolution">
-        {RESOLUTION_LABELS.map((label) => {
-          const isActive = active === label.toLowerCase();
-          return (
-            <Link
-              key={label}
-              href={resolutionHref(label, variant)}
-              aria-current={isActive ? "page" : undefined}
-              className={`rounded-md px-2 py-1 text-sm ${
-                isActive
-                  ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
-                  : "text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-900"
-              }`}
-            >
-              {label}
-            </Link>
-          );
-        })}
         {variant === "demo" ? (
-          // About (docs/prd/demo-about.md, AC-AB2, NFR-61) is demo-only: it
-          // explains the synthetic data and the deliberately absent write
-          // surfaces to a cold visitor, which the authenticated app has no
-          // reader for. It carries no active state — `active` is typed to the
-          // Body/Daily resolution pair, and widening it would change the
-          // shared live path too.
-          <Link
-            href="/demo/about"
-            className="ml-2 rounded-md px-2 py-1 text-sm text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-900"
-          >
-            About
-          </Link>
-        ) : (
           <>
-            {/* Fuel (Log Meal + Targets merged, this slice) and Connect (renamed from
-                Data) each carry the same active-highlight ternary Body/Daily already use
-                (AC-M49, AC-DS18, §0.8) — the zinc/emerald-consistent
-                bg-zinc-900/dark:bg-zinc-100 formula, never a new color. No aria-current
-                here (unlike Body/Daily, pre-existing): AC-D18's DO NOT EDIT test asserts
-                /connect renders with zero aria-current="page" anywhere, and AC-M49/
-                AC-DS18's own text specifies only the visual treatment, not an
-                aria-current claim. */}
+            {RESOLUTION_LABELS.map((label) => {
+              const isActive = active === label.toLowerCase();
+              return (
+                <Link
+                  key={label}
+                  href={resolutionHref(label, variant)}
+                  aria-current={isActive ? "page" : undefined}
+                  className={`rounded-md px-2 py-1 text-sm ${
+                    isActive
+                      ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                      : "text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-900"
+                  }`}
+                >
+                  {label}
+                </Link>
+              );
+            })}
+            {/* About (docs/prd/demo-about.md, AC-AB2, NFR-61) is demo-only: it
+                explains the synthetic data and the deliberately absent write
+                surfaces to a cold visitor, which the authenticated app has no
+                reader for. It carries no active state. */}
             <Link
-              href="/fuel"
-              className={`ml-2 rounded-md px-3 py-1 text-sm ${
-                active === "fuel"
-                  ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
-                  : "text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-900"
-              }`}
+              href="/demo/about"
+              className="ml-2 rounded-md px-2 py-1 text-sm text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-900"
             >
-              Fuel
-            </Link>
-            <Link
-              href="/connect"
-              className={`rounded-md px-3 py-1 text-sm ${
-                active === "connect"
-                  ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
-                  : "text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-900"
-              }`}
-            >
-              Connect
+              About
             </Link>
           </>
+        ) : (
+          LIVE_NAV_ITEMS.map((item) => {
+            const isActive = active === item.active;
+            return (
+              <Link
+                key={item.label}
+                href={item.href}
+                aria-current={item.ariaCurrent && isActive ? "page" : undefined}
+                className={`ml-2 rounded-md px-3 py-1 text-sm first:ml-0 ${
+                  isActive
+                    ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                    : "text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-900"
+                }`}
+              >
+                {item.label}
+              </Link>
+            );
+          })
         )}
       </nav>
     </header>
