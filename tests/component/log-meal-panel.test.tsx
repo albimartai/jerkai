@@ -5,7 +5,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { LogMealPanel } from "@/app/ui/log-meal-panel";
-import * as actions from "@/app/log-meal/actions";
+import * as actions from "@/app/fuel/actions";
 import type { MealEntryRow } from "@/lib/meal-entries";
 import { DASHBOARD_CONFIG } from "@/lib/dashboard/config";
 import { defaultMealType, type MealType } from "@/lib/dashboard/meal-type";
@@ -14,7 +14,7 @@ import { defaultMealType, type MealType } from "@/lib/dashboard/meal-type";
 // component tests exercising DOM events + re-fetch/re-render, which the node-env unit tier
 // and string-match rendering can't express. Server actions are mocked — no DATABASE_URL.
 
-vi.mock("@/app/log-meal/actions", () => ({
+vi.mock("@/app/fuel/actions", () => ({
   logMealAction: vi.fn(),
   updateMealEntryAction: vi.fn(),
   deleteMealEntryAction: vi.fn(),
